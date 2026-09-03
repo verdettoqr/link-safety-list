@@ -3,7 +3,6 @@
 
 Blocklist sources, each switchable with --skip:
   phishtank    PhishTank's verified, online phishes (full URLs). An application key raises the download limit.
-  openphish    OpenPhish community feed (full URLs).
   urlhaus      abuse.ch URLhaus, online malware URLs (full URLs, CC0).
   threatfox    abuse.ch ThreatFox, recent malware and botnet URLs (full URLs).
   certpl       CERT Polska's warning list of dangerous domains (hosts; an entry covers its subdomains).
@@ -51,7 +50,6 @@ BRANDS_TOP = 10_000
 
 BLOCKLISTS = {
     "phishtank": "http://data.phishtank.com/data/{key}online-valid.json.gz",
-    "openphish": "https://openphish.com/feed.txt",
     "urlhaus": "https://urlhaus.abuse.ch/downloads/text_online/",
     "threatfox": "https://threatfox.abuse.ch/export/csv/urls/recent/",
     "certpl": "https://hole.cert.pl/domains/v2/domains.txt",
