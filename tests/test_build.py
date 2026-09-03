@@ -110,3 +110,9 @@ def test_brands_reads_majestic_csv():
     csv = b"GlobalRank,TldRank,Domain,TLD,RefSubNets\n1,1,google.com,com,500\n2,2,Facebook.com,com,400\n3,3,,com,1\n"
     assert build_list.build_brands(csv) == "google.com\nfacebook.com\n"
 
+
+def test_polkadot_readers():
+    doms = build_list.read_polkadot_domains(b'{"allow": ["polkadot.js.org"], "deny": ["polkadot-wallet.example", "Dot-Airdrop.example"]}')
+    assert doms == ["polkadot-wallet.example", "Dot-Airdrop.example"]
+    addrs = build_list.read_polkadot_addresses(b'{"scam.example": ["1abc", "5xyz"], "other.example": ["5qrs"]}')
+    assert addrs == ["1abc", "5xyz", "5qrs"]

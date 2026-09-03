@@ -4,6 +4,9 @@
 Blocklist sources, each switchable with --skip:
   phishtank    PhishTank's verified, online phishes (full URLs). An application key raises the download limit.
   certpl       CERT Polska's warning list of dangerous domains (hosts; an entry covers its subdomains).
+  phishdestroy PhishDestroy destroylist, phishing and scam domains (MIT).
+  phishindex   PhishIndex own malicious domains (MIT).
+  polkadot     polkadot-js phishing deny list (hosts) and scam addresses (Apache-2.0).
 
 Reference data, always built:
   psl          Mozilla's Public Suffix List (MPL 2.0), so the phone computes registrable domains correctly.
@@ -48,7 +51,11 @@ BRANDS_TOP = 10_000
 BLOCKLISTS = {
     "phishtank": "http://data.phishtank.com/data/{key}online-valid.json.gz",
     "certpl": "https://hole.cert.pl/domains/v2/domains.txt",
+    "phishdestroy": "https://raw.githubusercontent.com/phishdestroy/destroylist/main/list.txt",
+    "phishindex": "https://raw.githubusercontent.com/PhishIndex/phishindex-blocklist/main/Data/Malicious%20Domains/txt/phishindex_domains.txt",
+    "polkadot": "https://polkadot.js.org/phishing/all.json",
 }
+POLKADOT_ADDRESSES = "https://polkadot.js.org/phishing/address.json"
 REFERENCE = {
     "psl": "https://publicsuffix.org/list/public_suffix_list.dat",
     "shorteners": "https://raw.githubusercontent.com/PeterDaveHello/url-shorteners/master/list",
@@ -299,6 +306,18 @@ def read_phishtank(data: bytes) -> list[str]:
     return [r["url"] for r in json.loads(data.decode("utf-8")) if r.get("verified") == "yes" and r.get("online") == "yes" and r.get("url")]
 
 
+def read_polkadot_domains(data: bytes) -> list[str]:
+    """polkadot-js/phishing all.json: {"allow": [...], "deny": [...]}; the deny list are the scam hosts."""
+    doc = json.loads(data.decode("utf-8"))
+    return [str(h) for h in doc.get("deny", [])]
+
+
+def read_polkadot_addresses(data: bytes) -> list[str]:
+    """polkadot-js/phishing address.json: {"site": ["address", ...], ...}; every address is a scam recipient."""
+    doc = json.loads(data.decode("utf-8"))
+    return [str(a) for addrs in doc.values() if isinstance(addrs, list) for a in addrs]
+
+
 def read_json_list(data: bytes) -> list[str]:
     return [str(r) for r in json.loads(data.decode("utf-8")) if isinstance(r, str)]
 
@@ -345,6 +364,11 @@ def collect(skip: set[str]) -> tuple[set[bytes], set[bytes], set[bytes], dict]:
             run(name, url.format(key=f"{key}/" if key else ""), env("PHISHTANK_UA", "phishtank/link-safety-list"), read_phishtank, add_url)
         elif name == "certpl":
             run(name, url, UA, read_lines, add_host)
+        elif name in ("phishdestroy", "phishindex"):
+            run(name, url, UA, read_lines, add_host)
+        elif name == "polkadot":
+            run(name, url, UA, read_polkadot_domains, add_host)
+            run("polkadot_addresses", POLKADOT_ADDRESSES, UA, read_polkadot_addresses, add_address)
         else:
             run(name, url, UA, read_lines, add_url)
     return urls, hosts, addresses, report
