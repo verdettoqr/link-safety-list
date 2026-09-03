@@ -99,16 +99,22 @@ def read_lines(data: bytes) -> list[str]:
     return out
 
 
+def env(name: str, default: str = "") -> str:
+    """An unset secret reaches a GitHub Actions step as an empty string, not as a missing variable:
+    treat empty as absent, or the PhishTank request goes out with an empty User-Agent and gets HTTP 403."""
+    return os.environ.get(name, "").strip() or default
+
+
 def collect(skip: set[str]) -> tuple[set[bytes], dict]:
     prefixes: set[bytes] = set()
     report: dict = {}
-    key = os.environ.get("PHISHTANK_APP_KEY", "").strip()
+    key = env("PHISHTANK_APP_KEY")
     for name, src in SOURCES.items():
         if name in skip:
             report[name] = {"fetched": False, "count": 0, "error": "skipped"}
             continue
         url = src["url"].format(key=f"{key}/" if key else "") if name == "phishtank" else src["url"]
-        ua = os.environ.get("PHISHTANK_UA", "phishtank/link-safety-list") if name == "phishtank" else UA
+        ua = env("PHISHTANK_UA", "phishtank/link-safety-list") if name == "phishtank" else UA
         t0 = time.time()
         try:
             data = fetch(url, ua)
@@ -140,7 +146,7 @@ def write_bin(path: str, url_prefixes: list[bytes], host_prefixes: list[bytes], 
 
 
 def sign(data: bytes) -> tuple[str | None, str | None]:
-    raw = os.environ.get("LIST_SIGNING_KEY", "").strip()
+    raw = env("LIST_SIGNING_KEY")
     if not raw:
         return None, None
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
