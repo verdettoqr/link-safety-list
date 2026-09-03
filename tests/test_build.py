@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import build_list
 from build_list import (  # noqa: E402
     ADDRESS_PREFIX, HOST_PREFIX, MAGIC, URL_PREFIX, build_confusables, build_shorteners, canonical, env,
-    normalize, normalize_address, normalize_host, prefix, read_threatfox, write_bin,
+    normalize, normalize_address, normalize_host, prefix, write_bin,
 )
 
 
@@ -46,10 +46,6 @@ def test_prefix_widths():
     assert len(prefix("evil.example", HOST_PREFIX)) == 6
     assert len(prefix("0xabc", ADDRESS_PREFIX)) == 8
 
-
-def test_threatfox_csv_keeps_url_rows_only():
-    data = b'# comment\n"2026-09-03 20:17:32", "1893907", "https://bad.example/api", "url", "payload_delivery"\n"2026-09-03", "1", "1.2.3.4:80", "ip:port", "botnet_cc"\n'
-    assert read_threatfox(data) == ["https://bad.example/api"]
 
 
 def test_shorteners_and_confusables_builders():
@@ -92,10 +88,3 @@ def test_brands_reads_majestic_csv():
     csv = b"GlobalRank,TldRank,Domain,TLD,RefSubNets\n1,1,google.com,com,500\n2,2,Facebook.com,com,400\n3,3,,com,1\n"
     assert build_list.build_brands(csv) == "google.com\nfacebook.com\n"
 
-
-def test_auth_headers_only_for_abusech(monkeypatch):
-    monkeypatch.setenv("ABUSECH_AUTH_KEY", "k")
-    assert build_list.auth_headers("urlhaus") == {"Auth-Key": "k"}
-    assert build_list.auth_headers("phishtank") == {}
-    monkeypatch.setenv("ABUSECH_AUTH_KEY", "")
-    assert build_list.auth_headers("urlhaus") == {}

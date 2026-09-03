@@ -3,10 +3,7 @@
 
 Blocklist sources, each switchable with --skip:
   phishtank    PhishTank's verified, online phishes (full URLs). An application key raises the download limit.
-  urlhaus      abuse.ch URLhaus, online malware URLs (full URLs, CC0).
-  threatfox    abuse.ch ThreatFox, recent malware and botnet URLs (full URLs).
   certpl       CERT Polska's warning list of dangerous domains (hosts; an entry covers its subdomains).
-  scamsniffer  ScamSniffer's crypto-scam domains (hosts) and scam wallet addresses.
 
 Reference data, always built:
   psl          Mozilla's Public Suffix List (MPL 2.0), so the phone computes registrable domains correctly.
@@ -19,7 +16,7 @@ shorteners.txt.gz, confusables.txt.gz, brands.txt.gz, list.json (the manifest: e
 and size, the source outcomes, the Ed25519 signature over the manifest when LIST_SIGNING_KEY is set),
 and list.sig (the same signature).
 
-Env: PHISHTANK_APP_KEY, PHISHTANK_UA (default phishtank/link-safety-list), ABUSECH_AUTH_KEY, LIST_SIGNING_KEY (base64, 32 bytes).
+Env: PHISHTANK_APP_KEY, PHISHTANK_UA (default phishtank/link-safety-list), LIST_SIGNING_KEY (base64, 32 bytes).
 """
 from __future__ import annotations
 
@@ -50,12 +47,8 @@ BRANDS_TOP = 10_000
 
 BLOCKLISTS = {
     "phishtank": "http://data.phishtank.com/data/{key}online-valid.json.gz",
-    "urlhaus": "https://urlhaus.abuse.ch/downloads/text_online/",
-    "threatfox": "https://threatfox.abuse.ch/export/csv/urls/recent/",
     "certpl": "https://hole.cert.pl/domains/v2/domains.txt",
-    "scamsniffer": "https://raw.githubusercontent.com/scamsniffer/scam-database/main/blacklist/domains.json",
 }
-SCAMSNIFFER_ADDRESSES = "https://raw.githubusercontent.com/scamsniffer/scam-database/main/blacklist/address.json"
 REFERENCE = {
     "psl": "https://publicsuffix.org/list/public_suffix_list.dat",
     "shorteners": "https://raw.githubusercontent.com/PeterDaveHello/url-shorteners/master/list",
@@ -123,12 +116,6 @@ def prefix(text: str, width: int) -> bytes:
 
 # ---------------------------------------------------------------- fetching and parsing
 
-def auth_headers(name: str) -> dict:
-    """abuse.ch requires an Auth-Key since 2025-06-30; URLhaus and ThreatFox get it when the secret is set."""
-    key = env("ABUSECH_AUTH_KEY")
-    return {"Auth-Key": key} if key and name in ("urlhaus", "threatfox") else {}
-
-
 def fetch(url: str, ua: str = UA, headers: dict | None = None) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": ua, "Accept-Encoding": "gzip", **(headers or {})})
     with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
@@ -149,14 +136,6 @@ def read_phishtank(data: bytes) -> list[str]:
     return [r["url"] for r in json.loads(data.decode("utf-8")) if r.get("verified") == "yes" and r.get("online") == "yes" and r.get("url")]
 
 
-def read_threatfox(data: bytes) -> list[str]:
-    out = []
-    for row in csv.reader(io.StringIO(data.decode("utf-8", errors="replace")), skipinitialspace=True):
-        if len(row) >= 4 and not row[0].startswith("#") and row[3].strip() == "url":
-            out.append(row[2].strip().strip('"'))
-    return out
-
-
 def read_json_list(data: bytes) -> list[str]:
     return [str(r) for r in json.loads(data.decode("utf-8")) if isinstance(r, str)]
 
@@ -171,7 +150,7 @@ def collect(skip: set[str]) -> tuple[set[bytes], set[bytes], set[bytes], dict]:
     def run(name: str, url: str, ua: str, parse, add) -> None:
         t0 = time.time()
         try:
-            items = parse(fetch(url, ua, auth_headers(name)))
+            items = parse(fetch(url, ua))
             added = sum(1 for item in items if add(item))
             report[name] = {"fetched": True, "count": added, "seconds": int(round(time.time() - t0))}
         except (urllib.error.URLError, urllib.error.HTTPError, ValueError, TimeoutError, OSError) as e:
@@ -201,13 +180,8 @@ def collect(skip: set[str]) -> tuple[set[bytes], set[bytes], set[bytes], dict]:
             continue
         if name == "phishtank":
             run(name, url.format(key=f"{key}/" if key else ""), env("PHISHTANK_UA", "phishtank/link-safety-list"), read_phishtank, add_url)
-        elif name == "threatfox":
-            run(name, url, UA, read_threatfox, add_url)
         elif name == "certpl":
             run(name, url, UA, read_lines, add_host)
-        elif name == "scamsniffer":
-            run(name, url, UA, read_json_list, add_host)
-            run("scamsniffer_addresses", SCAMSNIFFER_ADDRESSES, UA, read_json_list, add_address)
         else:
             run(name, url, UA, read_lines, add_url)
     return urls, hosts, addresses, report
