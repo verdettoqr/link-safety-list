@@ -1,65 +1,85 @@
 # link-safety-list
 
-A small, signed list of known phishing and malware addresses, compiled
-four times a day from open feeds, for a scanner app to check on the
-phone without asking anyone about the link.
+A small, signed bundle of open safety data, compiled four times a day,
+for a scanner app to check scanned links and wallet addresses on the
+phone without asking anyone about them.
 
 ## Why
 
 A QR or barcode scanner that checks links against a reputation service
 sends every scanned address to that service and leans on its rate
-limits. A list on the phone does neither: one anonymous download a day,
-then every check is local and works offline. This repository is the
-pipeline that makes the list. Nothing here runs a server, keeps a
+limits. A bundle on the phone does neither: one anonymous download a
+day, then every check is local and works offline. This repository is the
+pipeline that makes the bundle. Nothing here runs a server, keeps a
 database, or sees a user.
 
-## What is in the list
+## What is in the bundle
+
+Blocklists, hashed:
 
 | Source | What it contributes | Terms |
 |---|---|---|
-| [PhishTank](https://www.phishtank.com/) | Community-submitted phishing URLs that PhishTank has verified and that are online | [PhishTank developer terms](https://www.phishtank.com/developer_info.php); an application key raises the download limit |
+| [PhishTank](https://www.phishtank.com/) | Phishing URLs, community-submitted, verified, online | [Developer terms](https://www.phishtank.com/developer_info.php); an application key raises the download limit |
 | [OpenPhish](https://openphish.com/) community feed | Phishing URLs | [OpenPhish terms](https://openphish.com/terms.html) |
 | [URLhaus](https://urlhaus.abuse.ch/) by abuse.ch | Online malware-distribution URLs | CC0 |
+| [ThreatFox](https://threatfox.abuse.ch/) by abuse.ch | Recent malware and botnet URLs | [ThreatFox terms](https://threatfox.abuse.ch/faq/) |
+| [CERT Polska warning list](https://cert.pl/en/warning-list/) | Dangerous domains verified by a national CERT; an entry covers its subdomains; entries expire after six months | Public list; no license text published, ask CERT.PL before redistributing |
+| [ScamSniffer](https://github.com/scamsniffer/scam-database) | Crypto-scam domains and scam wallet addresses | See the repository's license |
 
-Only full addresses are listed, never whole hosts: a shared host such as
-a cloud drive must not be blocked because one file on it was bad. Each
-address is normalized the way the app normalizes a scanned link, hashed
-with SHA-256, and only the first 8 bytes are kept. The list therefore
-holds nothing readable, and a lookup cannot produce a false positive the
-way a Bloom filter can. See [FORMAT.md](FORMAT.md).
+Reference data, plain text:
+
+| Source | Used for | Terms |
+|---|---|---|
+| [Public Suffix List](https://publicsuffix.org/) | Registrable domains, so `bank.com.au` and every country suffix are computed right | MPL 2.0 |
+| [url-shorteners](https://github.com/PeterDaveHello/url-shorteners) | The "shortened link" warning, hundreds of hosts instead of a dozen | See the repository's license |
+| [Unicode confusables](https://www.unicode.org/Public/security/latest/) | Lookalike names: characters that imitate ASCII letters | Unicode license |
+| [Tranco](https://tranco-list.eu/) top 10,000 | "Popular site" notes and the targets of lookalike detection | See Tranco's terms |
+
+URLs, hosts, and addresses are normalized the way the app normalizes a
+scanned code, hashed with SHA-256, and only a short prefix is kept, so
+the bundle holds nothing readable and a lookup cannot produce a false
+positive the way a Bloom filter can. Hosts are listed as full domains
+that cover their subdomains; a shared host such as a cloud drive is
+never listed because one page on it was bad. See [FORMAT.md](FORMAT.md).
 
 ## Where to get it
 
 Every build replaces the assets of the rolling release tagged `current`:
 
 ```text
-https://github.com/verdettoqr/link-safety-list/releases/download/current/list.bin
 https://github.com/verdettoqr/link-safety-list/releases/download/current/list.json
+https://github.com/verdettoqr/link-safety-list/releases/download/current/list.bin
+https://github.com/verdettoqr/link-safety-list/releases/download/current/psl.txt.gz
+https://github.com/verdettoqr/link-safety-list/releases/download/current/shorteners.txt.gz
+https://github.com/verdettoqr/link-safety-list/releases/download/current/confusables.txt.gz
+https://github.com/verdettoqr/link-safety-list/releases/download/current/brands.txt.gz
 https://github.com/verdettoqr/link-safety-list/releases/download/current/list.sig
 ```
 
-`list.json` carries the build time, the counts per source, the SHA-256
-of the binary, and the signature. The phone verifies the signature with
-the public key compiled into the app before it accepts a new list.
+`list.json` carries the build time, the counts per source, every asset's
+SHA-256, and the signature over the manifest. The phone verifies the
+manifest with the public key compiled into the app, then each asset's
+hash, before it accepts a new bundle.
 
 ## How it runs
 
 `.github/workflows/build.yml` runs on a schedule (every six hours), on a
 manual dispatch, and on a push that changes the pipeline. It installs
 the requirements, runs the tests, builds `dist/`, verifies what it
-built, and uploads the three files to the `current` release.
+built, and uploads the assets to the `current` release.
 
 Secrets, all optional:
 
 | Secret | Purpose |
 |---|---|
-| `LIST_SIGNING_KEY` | Base64 of the 32-byte Ed25519 private key. Without it the list is published unsigned (the manifest still carries the SHA-256). |
+| `LIST_SIGNING_KEY` | Base64 of the 32-byte Ed25519 private key. Without it the bundle is published unsigned (the manifest still carries every SHA-256). |
 | `PHISHTANK_APP_KEY` | PhishTank application key for the higher download limit. PhishTank answers an empty User-Agent with HTTP 403, so the build always sends a descriptive one even when `PHISHTANK_UA` is unset |
 | `PHISHTANK_UA` | The descriptive User-Agent PhishTank asks for, `phishtank/<your username>` |
 
-A build refuses to publish when no source could be fetched or the list
-would be smaller than `--min-entries` (1,000), so an outage upstream can
-never replace a good list with an empty one.
+A build refuses to publish when no blocklist source could be fetched,
+when the URL list would be smaller than `--min-entries` (1,000), or when
+the Public Suffix List could not be built, so an outage upstream can
+never replace a good bundle with a broken one.
 
 ## Run it yourself
 
@@ -67,7 +87,7 @@ never replace a good list with an empty one.
 pip install -r requirements.txt
 python -m pytest -q
 python build_list.py --out dist
-python verify.py dist/list.bin dist/list.json https://example.com/
+python verify.py dist https://example.com/ login.evil.example 0x0000000000000000000000000000000000000000
 ```
 
 Generate a signing key pair (keep the private half as the secret, put
@@ -79,13 +99,13 @@ python -c "from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519
 
 ## Limits, said plainly
 
-The list is only as good as the feeds and only as fresh as the last
-build. A listed address is one that a feed had at build time; an
+The bundle is only as good as its sources and only as fresh as the last
+build. A listed address is one that a source had at build time; an
 unlisted address is not a statement that it is safe. An app that shows
-this list's result should say so.
+this bundle's result should say so.
 
 ## License
 
-The pipeline is MIT licensed. The list is a derived work of the feeds
-named above, under their terms; check those terms before redistributing
-the list in another product.
+The pipeline is MIT licensed. The bundle is a derived work of the
+sources named above, under their terms; check those terms before
+redistributing it in another product.

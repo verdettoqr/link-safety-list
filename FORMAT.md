@@ -1,48 +1,71 @@
-# List format, version 1 (`LSL1`)
+# Bundle format, version 2
 
-One binary file, little-endian, checked by binary search on the phone.
+One release, tagged `current`, replaced on every build. It holds:
+
+| Asset | What | Size, typical |
+|---|---|---|
+| `list.bin` | Sorted SHA-256 prefixes for listed URLs, hosts, and wallet addresses (`LSL2`) | 3 to 4 MB |
+| `psl.txt.gz` | The Public Suffix List rules, one per line (MPL 2.0) | 70 KB |
+| `shorteners.txt.gz` | URL shortener hosts, one per line | 6 KB |
+| `confusables.txt.gz` | Unicode confusables whose target is ASCII, `HEX<TAB>target` per line | 30 KB |
+| `brands.txt.gz` | The top 10,000 domains, one per line, most popular first | 60 KB |
+| `list.json` | The manifest: every asset's SHA-256 and size, source outcomes, the signature | 2 KB |
+| `list.sig` | The same signature on its own | 90 B |
+
+## `list.bin` (`LSL2`), little-endian
 
 | Offset | Size | Field |
 |---|---|---|
-| 0 | 4 | Magic `LSL1` |
-| 4 | 4 | Format version, `1` |
+| 0 | 4 | Magic `LSL2` |
+| 4 | 4 | Format version, `2` |
 | 8 | 8 | Generated-at, Unix seconds |
-| 16 | 4 | URL prefix count, `n` |
-| 20 | 4 | Host prefix count, `m` (always `0` in version 1; reserved) |
-| 24 | 8·n | URL prefixes, sorted ascending, unique |
-| 24 + 8·n | 8·m | Host prefixes, sorted ascending, unique |
+| 16 | 8 | URL section: count `u32`, prefix width `u8` (8), 3 bytes padding |
+| 24 | 8 | Host section: count `u32`, prefix width `u8` (6), 3 bytes padding |
+| 32 | 8 | Address section: count `u32`, prefix width `u8` (8), 3 bytes padding |
+| 40 | width·count each | URL prefixes, then host prefixes, then address prefixes; each section sorted ascending, unique |
 
-A prefix is the first 8 bytes of SHA-256 over the normalized address.
+A prefix is the first `width` bytes of SHA-256 over the normalized text.
+With about 10<sup>5</sup> URLs at 8 bytes and 5·10<sup>5</sup> hosts at 6
+bytes, the chance that an unrelated lookup collides with a listed entry
+is about 10<sup>-14</sup> and 2·10<sup>-9</sup> respectively: no filter,
+no false positives in practice, and nothing readable inside.
 
-## Normalization (must match the app)
+## Normalization (the app mirrors each rule)
 
-Scheme and host lowercased; an explicit port kept as written; the path
-`/` when empty; the query kept; the fragment dropped. Only `http` and
-`https` addresses are listed. Example: `HTTPS://Example.COM/a?b=1#c`
-becomes `https://example.com/a?b=1`.
+- **URL**: scheme and host lowercased; an explicit port kept as written;
+  the path `/` when empty; the query kept; the fragment dropped. Only
+  `http` and `https`.
+- **Host**: lowercased, no trailing dot, no scheme, path, or port. A
+  listed host covers its subdomains: the phone checks the scanned host
+  and then each parent domain, stopping at the registrable domain
+  (computed with the Public Suffix List), so `login.evil.example` is
+  caught by an entry for `evil.example` but `evil.example` is never
+  caught by an entry for `example`.
+- **Address**: trimmed; `0x` EVM addresses lowercased; other chains as
+  written.
 
 ## Lookup on the phone
 
-1. Normalize the scanned address the same way.
-2. SHA-256 it and take the first 8 bytes.
-3. Binary-search the URL prefix array. A hit means the exact
-   normalized address was in a source feed at build time.
+1. URL: normalize, hash, binary-search the URL section.
+2. Host: for the scanned host and each parent down to the registrable
+   domain, hash and binary-search the host section.
+3. Address: for a payment or wallet code, normalize, hash, binary-search
+   the address section.
+4. Shorteners: the host, or a parent, equals a line of `shorteners.txt`.
+5. Lookalikes: map each character of the lowercased Unicode host through
+   `confusables.txt` to its ASCII skeleton; if the skeleton's registrable
+   domain is in `brands.txt` and the literal host is not, the name imitates
+   a known site. A brand within edit distance one of the registrable
+   domain is a weaker signal, shown as a note only.
+6. Popular site: the registrable domain is in `brands.txt`.
 
-With 8-byte prefixes and about 10<sup>5</sup> entries the chance that
-an unrelated address collides with a listed one is about 10<sup>-14</sup>
-per lookup: no filter, no false positives in practice, and the file
-holds nothing readable about which addresses are listed.
+## Manifest and signature (`list.json`, `list.sig`)
 
-## Manifest (`list.json`)
-
-`format`, `version` (same as generated-at), `generated_at` (ISO 8601),
-`url_count`, `host_count`, `prefix_bytes`, `bytes`, `sha256` of the
-binary, `signature` (base64 Ed25519 over the binary, or null), `public_key`
-(hex, or null), `sources` (per source: fetched, count, seconds or error),
-and the normalization rule in words.
-
-## Signature (`list.sig`)
-
-The base64 Ed25519 signature over the whole binary, the same value as
-`signature` in the manifest. The phone verifies it with the public key
-compiled into the app before it replaces the list it already has.
+`format`, `version` (equals generated-at), `generated_at` (ISO 8601),
+`prefix_bytes`, `assets` (per file: `sha256`, `bytes`, and counts),
+`sources` (per source: fetched, count, seconds or error), `normalization`,
+then `signature` and `public_key`. The signature is Ed25519 over the
+canonical manifest: the manifest without `signature` and `public_key`,
+JSON with keys sorted and no whitespace. The phone verifies the manifest
+first, then each asset against its SHA-256, and only then replaces the
+bundle it has.
