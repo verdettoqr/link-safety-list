@@ -4,7 +4,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from build_list import MAGIC, PREFIX_BYTES, normalize, prefix, write_bin  # noqa: E402
+from build_list import MAGIC, PREFIX_BYTES, env, normalize, prefix, write_bin  # noqa: E402
 
 
 def test_normalize_matches_the_app_rule():
@@ -41,3 +41,13 @@ def test_bin_round_trip(tmp_path):
     off = 4 + struct.calcsize("<IQII")
     assert data[off:] == b"".join(entries)
     assert path.read_bytes() == data
+
+
+def test_empty_secret_counts_as_absent(monkeypatch):
+    # GitHub Actions hands an unset secret to the step as "", which once sent PhishTank an empty User-Agent (HTTP 403).
+    monkeypatch.setenv("PHISHTANK_UA", "")
+    assert env("PHISHTANK_UA", "phishtank/link-safety-list") == "phishtank/link-safety-list"
+    monkeypatch.setenv("PHISHTANK_UA", "  phishtank/someone  ")
+    assert env("PHISHTANK_UA", "x") == "phishtank/someone"
+    monkeypatch.delenv("PHISHTANK_UA", raising=False)
+    assert env("PHISHTANK_UA", "x") == "x"
