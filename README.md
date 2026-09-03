@@ -20,7 +20,6 @@ Blocklists, hashed:
 | Source | What it contributes | Terms |
 |---|---|---|
 | [PhishTank](https://www.phishtank.com/) | Phishing URLs, community-submitted, verified, online | [Developer terms](https://www.phishtank.com/developer_info.php); an application key raises the download limit |
-| [OpenPhish](https://openphish.com/) community feed | Phishing URLs | [OpenPhish terms](https://openphish.com/terms.html) |
 | [URLhaus](https://urlhaus.abuse.ch/) by abuse.ch | Online malware-distribution URLs | CC0 |
 | [ThreatFox](https://threatfox.abuse.ch/) by abuse.ch | Recent malware and botnet URLs | [ThreatFox terms](https://threatfox.abuse.ch/faq/) |
 | [CERT Polska warning list](https://cert.pl/en/warning-list/) | Dangerous domains verified by a national CERT; an entry covers its subdomains; entries expire after six months | Public list; no license text published, ask CERT.PL before redistributing |
@@ -109,3 +108,5 @@ this bundle's result should say so.
 The pipeline is MIT licensed. The bundle is a derived work of the
 sources named above, under their terms; check those terms before
 redistributing it in another product.
+
+Removed 2026-09-03: the OpenPhish community feed. Its terms allow neither redistribution nor derivative works nor commercial use without written consent, so it cannot feed a bundle that ships inside an app.
