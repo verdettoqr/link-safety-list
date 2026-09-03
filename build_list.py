@@ -169,7 +169,7 @@ def collect(skip: set[str]) -> tuple[set[bytes], set[bytes], set[bytes], dict]:
         try:
             items = parse(fetch(url, ua))
             added = sum(1 for item in items if add(item))
-            report[name] = {"fetched": True, "count": added, "seconds": round(time.time() - t0, 1)}
+            report[name] = {"fetched": True, "count": added, "seconds": int(round(time.time() - t0))}
         except (urllib.error.URLError, urllib.error.HTTPError, ValueError, TimeoutError, OSError) as e:
             report[name] = {"fetched": False, "count": 0, "error": f"{type(e).__name__}: {str(e)[:160]}"}
 
@@ -264,7 +264,7 @@ def build_reference(report: dict) -> dict[str, bytes]:
         try:
             text = builders[name](fetch(url))
             out[name] = text.encode("utf-8")
-            report[name] = {"fetched": True, "count": text.count("\n"), "seconds": round(time.time() - t0, 1)}
+            report[name] = {"fetched": True, "count": text.count("\n"), "seconds": int(round(time.time() - t0))}
         except (urllib.error.URLError, urllib.error.HTTPError, ValueError, TimeoutError, OSError, zipfile.BadZipFile, KeyError) as e:
             report[name] = {"fetched": False, "count": 0, "error": f"{type(e).__name__}: {str(e)[:160]}"}
     return out
