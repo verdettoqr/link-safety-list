@@ -33,9 +33,9 @@ way a Bloom filter can. See [FORMAT.md](FORMAT.md).
 Every build replaces the assets of the rolling release tagged `current`:
 
 ```text
-https://github.com/sam-khfam/link-safety-list/releases/download/current/list.bin
-https://github.com/sam-khfam/link-safety-list/releases/download/current/list.json
-https://github.com/sam-khfam/link-safety-list/releases/download/current/list.sig
+https://github.com/verdettoqr/link-safety-list/releases/download/current/list.bin
+https://github.com/verdettoqr/link-safety-list/releases/download/current/list.json
+https://github.com/verdettoqr/link-safety-list/releases/download/current/list.sig
 ```
 
 `list.json` carries the build time, the counts per source, the SHA-256

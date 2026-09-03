@@ -37,7 +37,7 @@ from urllib.parse import urlsplit
 MAGIC = b"LSL1"
 PREFIX_BYTES = 8
 TIMEOUT = 60
-UA = "link-safety-list/1.0 (+https://github.com/sam-khfam/link-safety-list)"
+UA = "link-safety-list/1.0 (+https://github.com/verdettoqr/link-safety-list)"
 
 SOURCES = {
     "phishtank": {"url": "http://data.phishtank.com/data/{key}online-valid.json.gz", "terms": "https://www.phishtank.com/developer_info.php"},

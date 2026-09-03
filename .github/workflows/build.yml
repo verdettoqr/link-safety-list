@@ -1,0 +1,55 @@
+name: Build the list
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"   # four times a day; phishing sites live hours to days
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["build_list.py", "verify.py", "tests/**", ".github/workflows/build.yml", "requirements.txt"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-the-list
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Test
+        run: python -m pytest -q
+
+      - name: Build
+        env:
+          PHISHTANK_APP_KEY: ${{ secrets.PHISHTANK_APP_KEY }}
+          PHISHTANK_UA: ${{ secrets.PHISHTANK_UA }}
+          LIST_SIGNING_KEY: ${{ secrets.LIST_SIGNING_KEY }}
+        run: python build_list.py --out dist
+
+      - name: Verify what was built
+        run: python verify.py dist/list.bin dist/list.json https://example.com/
+
+      # One rolling release tagged "current": the assets are replaced on every build, so the repository
+      # never grows and the download address never changes.
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          if ! gh release view current >/dev/null 2>&1; then
+            gh release create current --title "Current list" --notes "Rolling release. The assets are replaced on every build; see list.json for the build time and source counts." --latest=false
+          fi
+          gh release upload current dist/list.bin dist/list.json dist/list.sig --clobber
+          echo "published $(python -c "import json;m=json.load(open('dist/list.json'));print(m['url_count'],'entries,',m['bytes'],'bytes,',m['generated_at'])")"
