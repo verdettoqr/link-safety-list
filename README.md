@@ -54,7 +54,7 @@ Secrets, all optional:
 | Secret | Purpose |
 |---|---|
 | `LIST_SIGNING_KEY` | Base64 of the 32-byte Ed25519 private key. Without it the list is published unsigned (the manifest still carries the SHA-256). |
-| `PHISHTANK_APP_KEY` | PhishTank application key for the higher download limit |
+| `PHISHTANK_APP_KEY` | PhishTank application key. Needed on GitHub's runners: without a key PhishTank answers their addresses with HTTP 403, and the list is built from the other two feeds (the manifest records it) |
 | `PHISHTANK_UA` | The descriptive User-Agent PhishTank asks for, `phishtank/<your username>` |
 
 A build refuses to publish when no source could be fetched or the list
