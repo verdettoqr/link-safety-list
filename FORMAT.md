@@ -32,17 +32,26 @@ no false positives in practice, and nothing readable inside.
 
 ## Normalization (the app mirrors each rule)
 
-- **URL**: scheme and host lowercased; an explicit port kept as written;
-  the path `/` when empty; the query kept; the fragment dropped. Only
-  `http` and `https`.
-- **Host**: lowercased, no trailing dot, no scheme, path, or port. A
-  listed host covers its subdomains: the phone checks the scanned host
-  and then each parent domain, stopping at the registrable domain
-  (computed with the Public Suffix List), so `login.evil.example` is
-  caught by an entry for `evil.example` but `evil.example` is never
-  caught by an entry for `example`.
-- **Address**: trimmed; `0x` EVM addresses lowercased; other chains as
-  written.
+URL, version 3 (2026-09-03; the app's `UrlCanon` and `normalize()` here are
+one rule, held together by identical test vectors):
+
+1. Tabs and line breaks dropped; surrounding spaces trimmed.
+2. Scheme and host lowercased; only `http` and `https` are listed.
+3. User info (`user:pass@`) and the fragment dropped.
+4. The default port (80 for http, 443 for https) dropped; other ports kept.
+5. Host: percent-escapes decoded, dots collapsed and trimmed; a numeric IPv4
+   host in any form (hex, octal, decimal, short) written dotted-decimal.
+6. Path: `/` when empty; `.` and `..` resolved; duplicate slashes collapsed;
+   a trailing slash kept.
+7. Percent-escapes: unreserved ones (letters, digits, `-` `.` `_` `~`)
+   decoded, others uppercased; controls, spaces, non-ASCII, and `"<>\^\`{|}#`
+   percent-encoded as UTF-8; a bare `%` becomes `%25`.
+8. The query kept in order under rule 7.
+
+Host: lowercased, no trailing dot; the phone checks the host and each parent
+domain down to the registrable domain.
+
+Address: trimmed; 0x EVM addresses lowercased.
 
 ## Lookup on the phone
 

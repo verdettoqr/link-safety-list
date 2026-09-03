@@ -65,28 +65,191 @@ def env(name: str, default: str = "") -> str:
 
 # ---------------------------------------------------------------- normalization, mirrored by the app
 
+_HEX = "0123456789ABCDEF"
+_UNSAFE = set('"<>\\^`{|}#')
+
+
+def _is_unreserved(b: int) -> bool:
+    return (65 <= b <= 90) or (97 <= b <= 122) or (48 <= b <= 57) or b in (45, 46, 95, 126)
+
+
+def _percent_decode_all(s: str) -> str:
+    """Every %XX decoded once (the host rule); malformed escapes kept as written."""
+    if "%" not in s:
+        return s
+    out = bytearray()
+    i = 0
+    while i < len(s):
+        c = s[i]
+        if c == "%" and i + 2 < len(s) + 0 and i + 2 <= len(s) - 1 and s[i + 1] in "0123456789abcdefABCDEF" and s[i + 2] in "0123456789abcdefABCDEF":
+            out.append(int(s[i + 1:i + 3], 16))
+            i += 3
+        else:
+            out.extend(c.encode("utf-8"))
+            i += 1
+    return out.decode("utf-8", errors="replace")
+
+
+def _normalize_percent(s: str) -> str:
+    """Unreserved escapes decoded, other escapes uppercased, disallowed characters encoded as UTF-8 escapes."""
+    out = []
+    i = 0
+    while i < len(s):
+        c = s[i]
+        if c == "%":
+            if i + 2 <= len(s) - 1 and s[i + 1] in "0123456789abcdefABCDEF" and s[i + 2] in "0123456789abcdefABCDEF":
+                b = int(s[i + 1:i + 3], 16)
+                out.append(chr(b) if _is_unreserved(b) else "%" + _HEX[b >> 4] + _HEX[b & 15])
+                i += 3
+            else:
+                out.append("%25")
+                i += 1
+            continue
+        cp = ord(c)
+        if cp <= 0x20 or cp >= 0x7F or c in _UNSAFE:
+            for b in c.encode("utf-8"):
+                out.append("%" + _HEX[b >> 4] + _HEX[b & 15])
+        else:
+            out.append(c)
+        i += 1
+    return "".join(out)
+
+
+def _canonical_path(p: str) -> str:
+    """'.' and '..' resolved, duplicate slashes collapsed, a trailing slash kept."""
+    trailing = p.endswith("/") or p.endswith("/.") or p.endswith("/..")
+    out: list[str] = []
+    for seg in p.split("/"):
+        if seg in ("", "."):
+            continue
+        if seg == "..":
+            if out:
+                out.pop()
+            continue
+        out.append(seg)
+    joined = "/" + "/".join(out)
+    return joined + "/" if trailing and out else joined
+
+
+def ipv4_canonical(h: str) -> str | None:
+    """Dotted-decimal for any numeric IPv4 form (0x7f000001, 0177.0.0.1, 2130706433, 127.1); None when not numeric."""
+    parts = h.split(".")
+    if not parts or len(parts) > 4:
+        return None
+    values: list[int] = []
+    for part in parts:
+        if not part:
+            return None
+        if part[:2] in ("0x", "0X"):
+            d = part[2:]
+            if not d or len(d) > 8 or any(ch not in "0123456789abcdefABCDEF" for ch in d):
+                return None
+            values.append(int(d, 16))
+        elif len(part) > 1 and part[0] == "0" and all(ch in "01234567" for ch in part):
+            if len(part) > 12:
+                return None
+            values.append(int(part, 8))
+        elif part.isdigit() and all(ch in "0123456789" for ch in part):
+            if len(part) > 10:
+                return None
+            values.append(int(part))
+        else:
+            return None
+    remaining = 4 - (len(values) - 1)
+    if any(v > 255 for v in values[:-1]):
+        return None
+    if values[-1] >= (1 << (8 * remaining)):
+        return None
+    total = 0
+    for v in values[:-1]:
+        total = (total << 8) | v
+    total = (total << (8 * remaining)) | values[-1]
+    return ".".join(str((total >> sh) & 0xFF) for sh in (24, 16, 8, 0))
+
+
 def normalize(url: str) -> str | None:
-    """Scheme and host lowercased, explicit port kept, path '/' when empty, query kept, fragment dropped.
-    None for anything that is not an http(s) address."""
-    u = url.strip()
-    if not u or " " in u:
+    """Canonicalization v3, the same rule as the app's UrlCanon: tabs and line breaks dropped; scheme and host
+    lowercased; user info and fragment dropped; the default port dropped; host escapes decoded, dots collapsed and
+    trimmed; a numeric IPv4 host written dotted-decimal; dot segments resolved and duplicate slashes collapsed;
+    unreserved escapes decoded, other escapes uppercased; controls, spaces, non-ASCII, and unsafe characters
+    percent-encoded; the query kept in order under the same escaping. None for anything that is not http(s)."""
+    t = "".join(ch for ch in url.strip() if ch not in "\t\n\r")
+    scheme_end = t.find("://")
+    if scheme_end <= 0:
         return None
-    try:
-        p = urlsplit(u)
-    except ValueError:
+    scheme_raw = t[:scheme_end]
+    if not scheme_raw.isalpha() or not scheme_raw.isascii():
         return None
-    scheme = (p.scheme or "").lower()
-    try:
-        hostname, port = p.hostname, p.port
-    except ValueError:
+    scheme = scheme_raw.lower()
+    if scheme not in ("http", "https"):
         return None
-    if scheme not in ("http", "https") or not hostname:
+    rest = t[scheme_end + 3:]
+    hash_at = rest.find("#")
+    if hash_at >= 0:
+        rest = rest[:hash_at]
+    auth_end = len(rest)
+    for i, ch in enumerate(rest):
+        if ch in "/?":
+            auth_end = i
+            break
+    authority, tail = rest[:auth_end], rest[auth_end:]
+    at = authority.rfind("@")
+    if at >= 0:
+        authority = authority[at + 1:]
+    port_text = None
+    if authority.startswith("["):
+        close = authority.find("]")
+        if close < 0:
+            return None
+        host = authority[:close + 1]
+        after = authority[close + 1:]
+        if after.startswith(":"):
+            port_text = after[1:]
+        elif after:
+            return None
+    else:
+        colon = authority.rfind(":")
+        if colon >= 0:
+            host, port_text = authority[:colon], authority[colon + 1:]
+        else:
+            host = authority
+    if not host:
         return None
-    host = hostname.lower()
-    port_text = f":{port}" if port else ""
-    path = p.path or "/"
-    query = f"?{p.query}" if p.query else ""
-    return f"{scheme}://{host}{port_text}{path}{query}"
+    port = None
+    if port_text:
+        if not port_text.isdigit() or not port_text.isascii() or len(port_text) > 5:
+            return None
+        port = int(port_text)
+        if not 1 <= port <= 65535:
+            return None
+    if (scheme == "http" and port == 80) or (scheme == "https" and port == 443):
+        port = None
+    if host.startswith("["):
+        h = host.lower()
+    else:
+        h = host
+        for _ in range(3):
+            h = _percent_decode_all(h)
+        h = h.lower().strip(".")
+        while ".." in h:
+            h = h.replace("..", ".")
+        if not h:
+            return None
+        ip = ipv4_canonical(h)
+        if ip is not None:
+            h = ip
+    path, query = tail, None
+    q = path.find("?")
+    if q >= 0:
+        query, path = path[q + 1:], path[:q]
+    if not path:
+        path = "/"
+    path = _canonical_path(_normalize_percent(path))
+    if query is not None:
+        query = _normalize_percent(query)
+    port_part = f":{port}" if port else ""
+    query_part = f"?{query}" if query is not None else ""
+    return f"{scheme}://{h}{port_part}{path}{query_part}"
 
 
 def normalize_host(host: str) -> str | None:
@@ -366,7 +529,7 @@ def main() -> int:
         "sources": {k: v for k, v in report.items() if k != "psl_fetched_at"},
         "psl_fetched_at": int(report.get("psl_fetched_at", 0)),
         "normalization": {
-            "url": "scheme and host lowercased, explicit port kept, path '/' when empty, query kept, fragment dropped",
+            "url": "v3: tabs and line breaks dropped; scheme and host lowercased; user info and fragment dropped; default port dropped; host escapes decoded, dots collapsed and trimmed; numeric IPv4 hosts dotted-decimal; dot segments resolved, duplicate slashes collapsed; unreserved escapes decoded, others uppercased; controls, spaces, non-ASCII, and unsafe characters percent-encoded; query kept in order",
             "host": "lowercased, no trailing dot; the phone checks the host and each parent domain down to the registrable domain",
             "address": "trimmed; 0x EVM addresses lowercased",
         },
