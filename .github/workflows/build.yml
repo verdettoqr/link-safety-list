@@ -39,17 +39,17 @@ jobs:
         run: python build_list.py --out dist
 
       - name: Verify what was built
-        run: python verify.py dist/list.bin dist/list.json https://example.com/
+        run: python verify.py dist https://example.com/ www.bbc.co.uk
 
       # One rolling release tagged "current": the assets are replaced on every build, so the repository
-      # never grows and the download address never changes.
+      # never grows and the download addresses never change.
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -e
           if ! gh release view current >/dev/null 2>&1; then
-            gh release create current --title "Current list" --notes "Rolling release. The assets are replaced on every build; see list.json for the build time and source counts." --latest=false
+            gh release create current --title "Current bundle" --notes "Rolling release. The assets are replaced on every build; see list.json for the build time and source counts." --latest=false
           fi
-          gh release upload current dist/list.bin dist/list.json dist/list.sig --clobber
-          echo "published $(python -c "import json;m=json.load(open('dist/list.json'));print(m['url_count'],'entries,',m['bytes'],'bytes,',m['generated_at'])")"
+          gh release upload current dist/list.bin dist/list.json dist/list.sig dist/psl.txt.gz dist/shorteners.txt.gz dist/confusables.txt.gz dist/brands.txt.gz --clobber
+          python -c "import json;m=json.load(open('dist/list.json'));a=m['assets']['list.bin'];print('published',a['url_count'],'urls',a['host_count'],'hosts',a['address_count'],'addresses',m['generated_at'])"
