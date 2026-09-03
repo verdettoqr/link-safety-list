@@ -14,11 +14,33 @@ from build_list import (  # noqa: E402
 
 
 def test_normalize_matches_the_app_rule():
-    assert normalize("HTTPS://Example.COM") == "https://example.com/"
+    # the same vectors as the app's UrlCanonTest; a change here is a change there
+    assert normalize("HTTP://EXAMPLE.COM") == "http://example.com/"
     assert normalize("https://example.com/a/b?x=1#frag") == "https://example.com/a/b?x=1"
     assert normalize("http://Example.com:8080/p") == "http://example.com:8080/p"
+    assert normalize("https://example.com:443/a") == "https://example.com/a"
+    assert normalize("http://example.com:80/a") == "http://example.com/a"
+    assert normalize("https://user:pw@evil.example/login") == "https://evil.example/login"
+    assert normalize("https://example.com/%7Euser") == "https://example.com/~user"
+    assert normalize("https://example.com/%41%2f") == "https://example.com/A%2F"
     assert normalize("https://example.com/%E2%9C%93") == "https://example.com/%E2%9C%93"
+    assert normalize("https://example.com/\u00e9") == "https://example.com/%C3%A9"
+    assert normalize("https://example.com/a b") == "https://example.com/a%20b"
+    assert normalize("https://example.com/a/../login") == "https://example.com/login"
+    assert normalize("https://example.com/a//b/./c/") == "https://example.com/a/b/c/"
+    assert normalize("https://example.com..../x") == "https://example.com/x"
+    assert normalize("https://Example.COM./") == "https://example.com/"
+    assert normalize("https://exam\tple.com/\n") == "https://example.com/"
+    assert normalize("https://example.com/path?q=%7Ex&r=%2f") == "https://example.com/path?q=~x&r=%2F"
     assert normalize("  https://example.com/a  ") == "https://example.com/a"
+    assert normalize("http://0x7f000001/login") == "http://127.0.0.1/login"
+    assert normalize("http://0177.0.0.1/") == "http://127.0.0.1/"
+    assert normalize("http://2130706433/") == "http://127.0.0.1/"
+    assert normalize("http://127.1/") == "http://127.0.0.1/"
+    assert normalize("http://192.0.2.10/login") == "http://192.0.2.10/login"
+    assert normalize("http://[2001:DB8::1]:8080/") == "http://[2001:db8::1]:8080/"
+    assert build_list.ipv4_canonical("1234.com") is None
+    assert build_list.ipv4_canonical("256.1.1.1") is None
 
 
 def test_normalize_rejects_non_web_addresses():
