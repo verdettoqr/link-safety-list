@@ -6,6 +6,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import build_list
 from build_list import (  # noqa: E402
     ADDRESS_PREFIX, HOST_PREFIX, MAGIC, URL_PREFIX, build_confusables, build_shorteners, canonical, env,
     normalize, normalize_address, normalize_host, prefix, read_threatfox, write_bin,
