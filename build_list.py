@@ -19,7 +19,7 @@ shorteners.txt.gz, confusables.txt.gz, brands.txt.gz, list.json (the manifest: e
 and size, the source outcomes, the Ed25519 signature over the manifest when LIST_SIGNING_KEY is set),
 and list.sig (the same signature).
 
-Env: PHISHTANK_APP_KEY, PHISHTANK_UA (default phishtank/link-safety-list), LIST_SIGNING_KEY (base64, 32 bytes).
+Env: PHISHTANK_APP_KEY, PHISHTANK_UA (default phishtank/link-safety-list), ABUSECH_AUTH_KEY, LIST_SIGNING_KEY (base64, 32 bytes).
 """
 from __future__ import annotations
 
@@ -60,7 +60,7 @@ REFERENCE = {
     "psl": "https://publicsuffix.org/list/public_suffix_list.dat",
     "shorteners": "https://raw.githubusercontent.com/PeterDaveHello/url-shorteners/master/list",
     "confusables": "https://www.unicode.org/Public/security/latest/confusables.txt",
-    "brands": "https://tranco-list.eu/top-1m.csv.zip",
+    "brands": "https://downloads.majestic.com/majestic_million.csv",
 }
 
 
@@ -123,8 +123,14 @@ def prefix(text: str, width: int) -> bytes:
 
 # ---------------------------------------------------------------- fetching and parsing
 
-def fetch(url: str, ua: str = UA) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": ua, "Accept-Encoding": "gzip"})
+def auth_headers(name: str) -> dict:
+    """abuse.ch requires an Auth-Key since 2025-06-30; URLhaus and ThreatFox get it when the secret is set."""
+    key = env("ABUSECH_AUTH_KEY")
+    return {"Auth-Key": key} if key and name in ("urlhaus", "threatfox") else {}
+
+
+def fetch(url: str, ua: str = UA, headers: dict | None = None) -> bytes:
+    req = urllib.request.Request(url, headers={"User-Agent": ua, "Accept-Encoding": "gzip", **(headers or {})})
     with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
         data = r.read()
         if r.headers.get("Content-Encoding") == "gzip" or url.endswith(".gz"):
@@ -165,7 +171,7 @@ def collect(skip: set[str]) -> tuple[set[bytes], set[bytes], set[bytes], dict]:
     def run(name: str, url: str, ua: str, parse, add) -> None:
         t0 = time.time()
         try:
-            items = parse(fetch(url, ua))
+            items = parse(fetch(url, ua, auth_headers(name)))
             added = sum(1 for item in items if add(item))
             report[name] = {"fetched": True, "count": added, "seconds": int(round(time.time() - t0))}
         except (urllib.error.URLError, urllib.error.HTTPError, ValueError, TimeoutError, OSError) as e:
@@ -240,13 +246,24 @@ def build_confusables(data: bytes) -> str:
 
 
 def build_brands(data: bytes) -> str:
-    zf = zipfile.ZipFile(io.BytesIO(data))
-    rows = zf.read(zf.namelist()[0]).decode("utf-8", errors="replace").splitlines()
+    """The top domains: Majestic Million CSV (CC BY 3.0; a header row, the domain in the column named Domain),
+    or a Tranco-style zip of rank,domain rows. The first BRANDS_TOP registrable hosts, in rank order."""
+    if data[:2] == b"PK":
+        zf = zipfile.ZipFile(io.BytesIO(data))
+        rows = zf.read(zf.namelist()[0]).decode("utf-8", errors="replace").splitlines()
+        col = 1
+    else:
+        rows = data.decode("utf-8", errors="replace").splitlines()
+        header = [h.strip().lower() for h in rows[0].split(",")] if rows else []
+        if "domain" not in header:
+            raise ValueError("brands: no Domain column")
+        col = header.index("domain")
+        rows = rows[1:]
     domains: list[str] = []
     for row in rows:
         parts = row.split(",")
-        if len(parts) == 2:
-            h = normalize_host(parts[1])
+        if len(parts) > col:
+            h = normalize_host(parts[col])
             if h:
                 domains.append(h)
         if len(domains) >= BRANDS_TOP:
@@ -254,11 +271,41 @@ def build_brands(data: bytes) -> str:
     return "\n".join(domains) + "\n"
 
 
+RELEASE = "https://github.com/verdettoqr/link-safety-list/releases/download/current"
+PSL_MAX_AGE = 24 * 3600
+
+
+def previous_psl(now: int) -> tuple[bytes, int] | None:
+    """The PSL asset of the current release with its fetch time, when that fetch is under a day old
+    (publicsuffix.org asks for at most one download per day; this workflow runs four times a day)."""
+    try:
+        manifest = json.loads(fetch(f"{RELEASE}/list.json").decode("utf-8"))
+        fetched_at = int(manifest.get("psl_fetched_at", 0))
+        if fetched_at <= 0 or now - fetched_at >= PSL_MAX_AGE:
+            return None
+        data = gzip.decompress(fetch(f"{RELEASE}/psl.txt.gz"))
+        expected = manifest["assets"]["psl.txt.gz"]["sha256"]
+        if hashlib.sha256(gzip.compress(data, mtime=0)).hexdigest() != expected:
+            return None
+        return data, fetched_at
+    except (urllib.error.URLError, urllib.error.HTTPError, ValueError, KeyError, OSError, TimeoutError):
+        return None
+
+
 def build_reference(report: dict) -> dict[str, bytes]:
     builders = {"psl": build_psl, "shorteners": build_shorteners, "confusables": build_confusables, "brands": build_brands}
     out: dict[str, bytes] = {}
+    now = int(time.time())
     for name, url in REFERENCE.items():
         t0 = time.time()
+        if name == "psl":
+            kept = previous_psl(now)
+            if kept is not None:
+                out[name] = kept[0]
+                report[name] = {"fetched": True, "count": kept[0].count(b"\n"), "seconds": 0, "reused_from": kept[1]}
+                report["psl_fetched_at"] = kept[1]
+                continue
+            report["psl_fetched_at"] = now
         try:
             text = builders[name](fetch(url))
             out[name] = text.encode("utf-8")
@@ -342,7 +389,8 @@ def main() -> int:
         "generated_at": datetime.fromtimestamp(generated_at, timezone.utc).isoformat(),
         "prefix_bytes": {"url": URL_PREFIX, "host": HOST_PREFIX, "address": ADDRESS_PREFIX},
         "assets": assets,
-        "sources": report,
+        "sources": {k: v for k, v in report.items() if k != "psl_fetched_at"},
+        "psl_fetched_at": int(report.get("psl_fetched_at", 0)),
         "normalization": {
             "url": "scheme and host lowercased, explicit port kept, path '/' when empty, query kept, fragment dropped",
             "host": "lowercased, no trailing dot; the phone checks the host and each parent domain down to the registrable domain",

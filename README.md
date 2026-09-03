@@ -20,19 +20,19 @@ Blocklists, hashed:
 | Source | What it contributes | Terms |
 |---|---|---|
 | [PhishTank](https://www.phishtank.com/) | Phishing URLs, community-submitted, verified, online | [Developer terms](https://www.phishtank.com/developer_info.php); an application key raises the download limit |
-| [URLhaus](https://urlhaus.abuse.ch/) by abuse.ch | Online malware-distribution URLs | CC0 |
-| [ThreatFox](https://threatfox.abuse.ch/) by abuse.ch | Recent malware and botnet URLs | [ThreatFox terms](https://threatfox.abuse.ch/faq/) |
+| [URLhaus](https://urlhaus.abuse.ch/) by abuse.ch | Online malware-distribution URLs | [abuse.ch Terms of Use](https://abuse.ch/terms-of-use/): not-for-profit use, Auth-Key required; redistribution of derived data requested in writing (2026-09-03) |
+| [ThreatFox](https://threatfox.abuse.ch/) by abuse.ch | Recent malware and botnet URLs | same as URLhaus |
 | [CERT Polska warning list](https://cert.pl/en/warning-list/) | Dangerous domains verified by a national CERT; an entry covers its subdomains; entries expire after six months | Public list; no license text published, ask CERT.PL before redistributing |
-| [ScamSniffer](https://github.com/scamsniffer/scam-database) | Crypto-scam domains and scam wallet addresses | See the repository's license |
+| [ScamSniffer](https://github.com/scamsniffer/scam-database) | Crypto-scam domains and scam wallet addresses | GPL-3.0 on the repository; a data licence for the derived prefixes was requested (2026-09-03) |
 
 Reference data, plain text:
 
 | Source | Used for | Terms |
 |---|---|---|
 | [Public Suffix List](https://publicsuffix.org/) | Registrable domains, so `bank.com.au` and every country suffix are computed right | MPL 2.0 |
-| [url-shorteners](https://github.com/PeterDaveHello/url-shorteners) | The "shortened link" warning, hundreds of hosts instead of a dozen | See the repository's license |
+| [url-shorteners](https://github.com/PeterDaveHello/url-shorteners) | The "shortened link" warning, hundreds of hosts instead of a dozen | CC BY-SA 4.0; `shorteners.txt.gz` is redistributed under the same licence with attribution |
 | [Unicode confusables](https://www.unicode.org/Public/security/latest/) | Lookalike names: characters that imitate ASCII letters | Unicode license |
-| [Tranco](https://tranco-list.eu/) top 10,000 | "Popular site" notes and the targets of lookalike detection | See Tranco's terms |
+| [Majestic Million](https://majestic.com/reports/majestic-million) top 10,000 | "Popular site" notes and the targets of lookalike detection | CC BY 3.0 (replaced Tranco on 2026-09-03: its default list mixes CC BY-NC and CC BY-SA inputs) |
 
 URLs, hosts, and addresses are normalized the way the app normalizes a
 scanned code, hashed with SHA-256, and only a short prefix is kept, so
@@ -110,3 +110,16 @@ sources named above, under their terms; check those terms before
 redistributing it in another product.
 
 Removed 2026-09-03: the OpenPhish community feed. Its terms allow neither redistribution nor derivative works nor commercial use without written consent, so it cannot feed a bundle that ships inside an app.
+
+## Attribution and licences
+
+The bundle is a collection; each asset keeps its source's terms.
+
+- PhishTank data from OpenDNS/Cisco (https://www.phishtank.com/), fetched with an application key and a descriptive user agent; available for commercial use without charge.
+- URLhaus and ThreatFox are abuse.ch platforms (https://abuse.ch/); abuse.ch and its contributors are the authors of that content.
+- The CERT Polska warning list (https://cert.pl/lista-ostrzezen/) is published by NASK-PIB; the open-data copy is CC0 1.0.
+- ScamSniffer scam-database (https://github.com/scamsniffer/scam-database), GPL-3.0.
+- `psl.txt.gz` is derived from the Public Suffix List (https://publicsuffix.org/), Mozilla Public License 2.0; the source is pulled from publicsuffix.org once a day.
+- `shorteners.txt.gz` is derived from url-shorteners by Peter Dave Hello (https://github.com/PeterDaveHello/url-shorteners), CC BY-SA 4.0, and is itself CC BY-SA 4.0.
+- `confusables.txt.gz` is derived from the Unicode confusables data. Copyright (c) 1991-2025 Unicode, Inc. Licensed under the Unicode License v3 (https://www.unicode.org/license.txt).
+- `brands.txt.gz` is derived from the Majestic Million (https://majestic.com/reports/majestic-million), CC BY 3.0.

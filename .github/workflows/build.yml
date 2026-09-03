@@ -35,6 +35,7 @@ jobs:
         env:
           PHISHTANK_APP_KEY: ${{ secrets.PHISHTANK_APP_KEY }}
           PHISHTANK_UA: ${{ secrets.PHISHTANK_UA }}
+          ABUSECH_AUTH_KEY: ${{ secrets.ABUSECH_AUTH_KEY }}
           LIST_SIGNING_KEY: ${{ secrets.LIST_SIGNING_KEY }}
         run: python build_list.py --out dist
 

@@ -85,3 +85,16 @@ def test_empty_secret_counts_as_absent(monkeypatch):
     assert env("PHISHTANK_UA", "x") == "phishtank/someone"
     monkeypatch.delenv("PHISHTANK_UA", raising=False)
     assert env("PHISHTANK_UA", "x") == "x"
+
+
+def test_brands_reads_majestic_csv():
+    csv = b"GlobalRank,TldRank,Domain,TLD,RefSubNets\n1,1,google.com,com,500\n2,2,Facebook.com,com,400\n3,3,,com,1\n"
+    assert build_list.build_brands(csv) == "google.com\nfacebook.com\n"
+
+
+def test_auth_headers_only_for_abusech(monkeypatch):
+    monkeypatch.setenv("ABUSECH_AUTH_KEY", "k")
+    assert build_list.auth_headers("urlhaus") == {"Auth-Key": "k"}
+    assert build_list.auth_headers("phishtank") == {}
+    monkeypatch.setenv("ABUSECH_AUTH_KEY", "")
+    assert build_list.auth_headers("urlhaus") == {}
