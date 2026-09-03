@@ -21,6 +21,9 @@ Blocklists, hashed:
 |---|---|---|
 | [PhishTank](https://www.phishtank.com/) | Phishing URLs, community-submitted, verified, online | [Developer terms](https://www.phishtank.com/developer_info.php); an application key raises the download limit |
 | [CERT Polska warning list](https://cert.pl/en/warning-list/) | Dangerous domains verified by a national CERT; an entry covers its subdomains; entries expire after six months | Public list; no license text published, ask CERT.PL before redistributing |
+| [PhishDestroy destroylist](https://github.com/phishdestroy/destroylist) | Phishing and scam domains, crypto-heavy, community and own detection | MIT |
+| [PhishIndex blocklist](https://github.com/PhishIndex/phishindex-blocklist) | Malicious domains from PhishIndex's own detection (their aggregate list is not used) | MIT |
+| [polkadot-js phishing](https://github.com/polkadot-js/phishing) | Crypto scam domains (deny list) and scam wallet addresses (Substrate SS58) | Apache-2.0 |
 
 Reference data, plain text:
 
@@ -106,7 +109,7 @@ The pipeline is MIT licensed. The bundle is a derived work of the
 sources named above, under their terms; check those terms before
 redistributing it in another product.
 
-Removed 2026-09-03: the OpenPhish community feed (its terms allow neither redistribution nor derivative works nor commercial use), and URLhaus, ThreatFox, and ScamSniffer (their terms would need a written grant for redistributing derived data). The project uses only sources whose published terms allow this use outright.
+Added 2026-09-03 after a search for feeds with outright-permissive terms: PhishDestroy, PhishIndex, polkadot-js. Removed 2026-09-03: the OpenPhish community feed (its terms allow neither redistribution nor derivative works nor commercial use), and URLhaus, ThreatFox, and ScamSniffer (their terms would need a written grant for redistributing derived data). The project uses only sources whose published terms allow this use outright.
 
 ## Attribution and licences
 
@@ -114,6 +117,9 @@ The bundle is a collection; each asset keeps its source's terms.
 
 - PhishTank data from OpenDNS/Cisco (https://www.phishtank.com/), fetched with an application key and a descriptive user agent; available for commercial use without charge.
 - The CERT Polska warning list (https://cert.pl/lista-ostrzezen/) is published by NASK-PIB; the open-data copy is CC0 1.0.
+- PhishDestroy destroylist (https://github.com/phishdestroy/destroylist), MIT License, Copyright (c) PhishDestroy.
+- PhishIndex blocklist (https://github.com/PhishIndex/phishindex-blocklist), MIT License.
+- polkadot-js/phishing (https://github.com/polkadot-js/phishing), Apache License 2.0.
 - `psl.txt.gz` is derived from the Public Suffix List (https://publicsuffix.org/), Mozilla Public License 2.0; the source is pulled from publicsuffix.org once a day.
 - `shorteners.txt.gz` is derived from url-shorteners by Peter Dave Hello (https://github.com/PeterDaveHello/url-shorteners), CC BY-SA 4.0, and is itself CC BY-SA 4.0.
 - `confusables.txt.gz` is derived from the Unicode confusables data. Copyright (c) 1991-2025 Unicode, Inc. Licensed under the Unicode License v3 (https://www.unicode.org/license.txt).
