@@ -82,7 +82,12 @@ Secrets, all optional:
 A build refuses to publish when no blocklist source could be fetched,
 when the URL list would be smaller than `--min-entries` (1,000), or when
 the Public Suffix List could not be built, so an outage upstream can
-never replace a good bundle with a broken one.
+never replace a good bundle with a broken one. A source that answers
+404, 408, 425, 429, or a 5xx, or does not answer at all, is tried three
+times, 30 s and then 60 s apart, before it counts as failed; a 403 is a
+credential or User-Agent problem and is not retried. PhishTank's hourly
+dump answered 404 for a moment on 2026-09-04, and as the only URL-class
+source that alone stopped a build (issue #4).
 
 ## Run it yourself
 

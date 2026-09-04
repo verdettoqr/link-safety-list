@@ -184,3 +184,75 @@ def test_aic_builder():
     out = build_list.build_aic((head + row + rows).encode("utf-8"))
     assert "000367045\tTISANA KELEMATA\t10 BUSTINE FILTRO G 2\tKELEMATA S.R.L.\tA\n" in out
     assert "000000001\tMED 1\tpack\tHOLDER\tS\n" in out
+
+
+def _fake_response(body: bytes):
+    import io
+
+    class Response(io.BytesIO):
+        headers = {}
+
+    return Response(body)
+
+
+def test_fetch_retries_transient_http_errors(monkeypatch):
+    # 2026-09-04: PhishTank's dump answered 404 for a moment, the URL count fell to 0 and nothing was published (issue #4)
+    import urllib.error
+    import urllib.request
+
+    calls, slept = [], []
+
+    def fake_urlopen(req, timeout=None):
+        calls.append(req.full_url)
+        if len(calls) < 3:
+            raise urllib.error.HTTPError(req.full_url, 404, "Not Found", {}, None)
+        return _fake_response(b"ok")
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(build_list.time, "sleep", slept.append)
+    assert build_list.fetch("https://example.test/list.json") == b"ok"
+    assert len(calls) == 3
+    assert slept == [build_list.RETRY_DELAY, 2 * build_list.RETRY_DELAY]
+
+
+def test_fetch_gives_up_after_the_last_attempt(monkeypatch):
+    import urllib.error
+    import urllib.request
+
+    import pytest
+
+    calls, slept = [], []
+
+    def fake_urlopen(req, timeout=None):
+        calls.append(1)
+        raise urllib.error.HTTPError(req.full_url, 503, "Service Unavailable", {}, None)
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(build_list.time, "sleep", slept.append)
+    with pytest.raises(urllib.error.HTTPError):
+        build_list.fetch("https://example.test/list.json")
+    assert len(calls) == build_list.RETRY_ATTEMPTS
+    assert len(slept) == build_list.RETRY_ATTEMPTS - 1
+
+
+def test_fetch_does_not_retry_forbidden(monkeypatch):
+    # a 403 is PhishTank refusing the User-Agent or key; a retry would only repeat the refusal
+    import urllib.error
+    import urllib.request
+
+    import pytest
+
+    calls = []
+
+    def fake_urlopen(req, timeout=None):
+        calls.append(1)
+        raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", {}, None)
+
+    def no_sleep(seconds):
+        raise AssertionError("slept before a non-retryable error")
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(build_list.time, "sleep", no_sleep)
+    with pytest.raises(urllib.error.HTTPError):
+        build_list.fetch("https://example.test/list.json")
+    assert calls == [1]

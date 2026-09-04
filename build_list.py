@@ -47,6 +47,9 @@ URL_PREFIX = 8      # exact-address entries; about 1e5 of them, collision odds a
 HOST_PREFIX = 6     # domain entries; about 5e5 of them, collision odds about 2e-9 per lookup
 ADDRESS_PREFIX = 8
 TIMEOUT = 90
+RETRY_ATTEMPTS = 3          # downloads per source before it counts as failed
+RETRY_DELAY = 30.0          # seconds before the second attempt; the third waits twice as long
+RETRY_STATUS = {404, 408, 425, 429, 500, 502, 503, 504}   # answers worth a retry; 403 is not one
 UA = "link-safety-list/2.0 (+https://github.com/verdettoqr/link-safety-list)"
 BRANDS_TOP = 10_000
 
@@ -303,15 +306,35 @@ def prefix(text: str, width: int) -> bytes:
 # ---------------------------------------------------------------- fetching and parsing
 
 def fetch(url: str, ua: str = UA, headers: dict | None = None) -> bytes:
+    """One download, tried up to RETRY_ATTEMPTS times.
+
+    A source that answers 404, 408, 425, 429, or a 5xx, or does not answer at all, is tried again
+    after RETRY_DELAY seconds and once more after twice that: PhishTank's hourly dump answered 404
+    for a moment on 2026-09-04, it is the only URL-class source, and the build refused to publish
+    (issue #4). A 403 is a credential or User-Agent problem and is raised at once."""
     req = urllib.request.Request(url, headers={"User-Agent": ua, "Accept-Encoding": "gzip", **(headers or {})})
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
-        data = r.read()
-        if r.headers.get("Content-Encoding") == "gzip" or url.endswith(".gz"):
-            try:
-                data = gzip.decompress(data)
-            except (OSError, EOFError):
-                pass
-        return data
+    for attempt in range(1, RETRY_ATTEMPTS + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+                data = r.read()
+                if r.headers.get("Content-Encoding") == "gzip" or url.endswith(".gz"):
+                    try:
+                        data = gzip.decompress(data)
+                    except (OSError, EOFError):
+                        pass
+                return data
+        except urllib.error.HTTPError as e:
+            if e.code not in RETRY_STATUS or attempt == RETRY_ATTEMPTS:
+                raise
+            reason = f"HTTP {e.code}"
+        except (urllib.error.URLError, TimeoutError, OSError) as e:
+            if attempt == RETRY_ATTEMPTS:
+                raise
+            reason = type(e).__name__
+        delay = RETRY_DELAY * attempt
+        print(f"{url}: {reason}; retrying in {int(delay)} s (attempt {attempt} of {RETRY_ATTEMPTS})", file=sys.stderr)
+        time.sleep(delay)
+    raise RuntimeError("unreachable")
 
 
 def read_lines(data: bytes) -> list[str]:
