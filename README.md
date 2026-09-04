@@ -24,6 +24,7 @@ Blocklists, hashed:
 | [PhishDestroy destroylist](https://github.com/phishdestroy/destroylist) | Phishing and scam domains, crypto-heavy, community and own detection | MIT |
 | [PhishIndex blocklist](https://github.com/PhishIndex/phishindex-blocklist) | Malicious domains from PhishIndex's own detection (their aggregate list is not used) | MIT |
 | [polkadot-js phishing](https://github.com/polkadot-js/phishing) | Crypto scam domains (deny list) and scam wallet addresses (Substrate SS58) | Apache-2.0 |
+| [OFAC SDN list](https://ofac.treasury.gov/specially-designated-nationals-and-blocked-persons-list-sdn-human-readable-lists) (US Treasury) | Sanctioned digital-currency addresses (Bitcoin, Ethereum, Tron, Tether, and others), from the official Sanctions List Service | US government work, public domain (17 U.S.C. 105); no Treasury seal or logo is used |
 
 Reference data, plain text:
 
@@ -120,6 +121,7 @@ The bundle is a collection; each asset keeps its source's terms.
 - PhishDestroy destroylist (https://github.com/phishdestroy/destroylist), MIT License, Copyright (c) PhishDestroy.
 - PhishIndex blocklist (https://github.com/PhishIndex/phishindex-blocklist), MIT License.
 - polkadot-js/phishing (https://github.com/polkadot-js/phishing), Apache License 2.0.
+- The OFAC Specially Designated Nationals list, U.S. Department of the Treasury, Office of Foreign Assets Control: a work of the United States Government, not subject to copyright in the United States (17 U.S.C. 105); fetched from the Sanctions List Service. The Treasury seal and OFAC's name are not used as endorsement.
 - `psl.txt.gz` is derived from the Public Suffix List (https://publicsuffix.org/), Mozilla Public License 2.0; the source is pulled from publicsuffix.org once a day.
 - `shorteners.txt.gz` is derived from url-shorteners by Peter Dave Hello (https://github.com/PeterDaveHello/url-shorteners), CC BY-SA 4.0, and is itself CC BY-SA 4.0.
 - `confusables.txt.gz` is derived from the Unicode confusables data. Copyright (c) 1991-2025 Unicode, Inc. Licensed under the Unicode License v3 (https://www.unicode.org/license.txt).
