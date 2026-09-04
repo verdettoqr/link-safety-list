@@ -69,7 +69,14 @@ REFERENCE = {
         "BIND(%22L%22%20AS%20%3Fkind)%20%3Fitem%20rdfs%3Alabel%20%3Fname%20.%20FILTER(LANG(%3Fname)%20%3D%20%22en%22)%20%7D%20"
         "OPTIONAL%20%7B%20%3Fitem%20wikibase%3Asitelinks%20%3Flinks%20%7D%20%7D"
     ),
+    # the builder fetches the per-country files under this directory itself
+    "postal": "https://download.geonames.org/export/zip/",
+    "aic": "https://drive.aifa.gov.it/farmaci/confezioni_fornitura.csv",
 }
+
+# GeoNames country files kept for the postal symbologies the reader decodes: POSTNET and Intelligent Mail (US),
+# RM4SCC and Mailmark (GB), KIX (NL), Japan Post (JP), CEPNET (BR), Deutsche Post Leitcode (DE), Korea Post (KR)
+POSTAL_COUNTRIES = ("US", "GB", "NL", "JP", "BR", "DE", "KR")
 
 
 def env(name: str, default: str = "") -> str:
@@ -518,8 +525,73 @@ def build_aviation(data: bytes) -> str:
     return "\n".join(f"{k}\t{c}\t{n}" for (k, c), n in sorted(rows.items())) + "\n"
 
 
+def parse_postal_txt(country: str, text: str) -> dict[tuple[str, str], str]:
+    """One GeoNames postal-code file: country, postal code, place name, admin1 name, admin1 code, admin2 name,
+    admin2 code, admin3 name, admin3 code, latitude, longitude, accuracy. The first row per code wins."""
+    rows: dict[tuple[str, str], str] = {}
+    for line in text.split("\n"):
+        f = line.split("\t")
+        if len(f) < 11 or f[0] != country:
+            continue
+        code = f[1].strip().upper()
+        place = f[2].strip()
+        if not code or not place:
+            continue
+        admin1 = f[3].strip()
+        try:
+            lat = f"{float(f[9]):.3f}"
+            lng = f"{float(f[10]):.3f}"
+        except ValueError:
+            lat = lng = ""
+        rows.setdefault((country, code), "\t".join((place, admin1, lat, lng)))
+    return rows
+
+
+def build_postal(index: bytes) -> str:
+    """GeoNames postal codes (CC BY 4.0), the country files named in POSTAL_COUNTRIES, one line per code as
+    country<TAB>code<TAB>place<TAB>region<TAB>lat<TAB>lng; the phone names the place behind a postal barcode."""
+    rows: dict[tuple[str, str], str] = {}
+    base = REFERENCE["postal"]
+    for cc in POSTAL_COUNTRIES:
+        data = fetch(base + cc + ".zip")
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            name = cc + ".txt"
+            if name not in z.namelist():
+                raise ValueError(f"postal: {cc}.zip carries no {name}")
+            rows.update(parse_postal_txt(cc, z.read(name).decode("utf-8")))
+    if len(rows) < 50000:
+        raise ValueError(f"postal: only {len(rows)} rows, a country file answered short")
+    return "\n".join(f"{cc}\t{code}\t{rest}" for (cc, code), rest in sorted(rows.items())) + "\n"
+
+
+def build_aic(data: bytes) -> str:
+    """The AIFA list of authorised medicine packs (CC BY 4.0): AIC code, name, pack, holder, and a status letter
+    (A authorised, S suspended, R revoked), one line per pack; the phone names an Italian pharmacode's medicine."""
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        text = data.decode("cp1252", errors="replace")
+    reader = csv.DictReader(io.StringIO(text), delimiter=";")
+    status_letter = {"autorizzata": "A", "sospesa": "S", "revocata": "R"}
+    rows: dict[str, str] = {}
+    for r in reader:
+        aic = (r.get("CODICE_AIC") or "").strip()
+        if len(aic) != 9 or not aic.isdigit():
+            continue
+        name = (r.get("DENOMINAZIONE") or "").strip()
+        pack = (r.get("DESCRIZIONE") or "").strip()
+        holder = (r.get("RAGIONE_SOCIALE") or "").strip()
+        status = status_letter.get((r.get("STATO_AMMINISTRATIVO") or "").strip().lower(), "?")
+        if not name:
+            continue
+        rows.setdefault(aic, "\t".join(x.replace("\t", " ") for x in (name, pack, holder, status)))
+    if len(rows) < 20000:
+        raise ValueError(f"aic: only {len(rows)} rows, the list answered short")
+    return "\n".join(f"{aic}\t{rest}" for aic, rest in sorted(rows.items())) + "\n"
+
+
 def build_reference(report: dict) -> dict[str, bytes]:
-    builders = {"psl": build_psl, "shorteners": build_shorteners, "confusables": build_confusables, "brands": build_brands, "aviation": build_aviation}
+    builders = {"psl": build_psl, "shorteners": build_shorteners, "confusables": build_confusables, "brands": build_brands, "aviation": build_aviation, "postal": build_postal, "aic": build_aic}
     out: dict[str, bytes] = {}
     now = int(time.time())
     for name, url in REFERENCE.items():

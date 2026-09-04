@@ -160,3 +160,25 @@ def test_aviation_builder():
     ]
     out = build_list.build_aviation(_json.dumps(doc).encode("utf-8"))
     assert "L\tZQ\tZed Air\n" in out and "Regional" not in out
+
+
+def test_postal_parser():
+    txt = "US\t22307\tAlexandria\tVirginia\tVA\tFairfax\t059\t\t\t38.7717\t-77.0578\t4\n" \
+          "US\t22307\tBelle View\tVirginia\tVA\tFairfax\t059\t\t\t38.77\t-77.05\t4\n" \
+          "GB\tSW1A\tWestminster\tEngland\tENG\tGreater London\t\t\t\t51.5\t-0.14\t4\n" \
+          "US\t\tNoCode\tVirginia\tVA\t\t\t\t\t0\t0\t1\n"
+    rows = build_list.parse_postal_txt("US", txt)
+    assert rows == {("US", "22307"): "Alexandria\tVirginia\t38.772\t-77.058"}
+    assert build_list.parse_postal_txt("GB", txt) == {("GB", "SW1A"): "Westminster\tEngland\t51.500\t-0.140"}
+
+
+def test_aic_builder():
+    import pytest
+    head = '"CODICE_AIC";"COD_FARMACO";"COD_CONFEZIONE";"DENOMINAZIONE";"DESCRIZIONE";"CODICE_DITTA";"RAGIONE_SOCIALE";"STATO_AMMINISTRATIVO"\n'
+    row = '"000367045";"000367";"045";"TISANA KELEMATA";"10 BUSTINE FILTRO G 2";2934;"KELEMATA S.R.L.";"Autorizzata"\n'
+    with pytest.raises(ValueError):
+        build_list.build_aic((head + row).encode("utf-8"))
+    rows = "".join('"%09d";"x";"y";"MED %d";"pack";1;"HOLDER";"%s"\n' % (i, i, ("Autorizzata", "Sospesa", "Revocata")[i % 3]) for i in range(20001))
+    out = build_list.build_aic((head + row + rows).encode("utf-8"))
+    assert "000367045\tTISANA KELEMATA\t10 BUSTINE FILTRO G 2\tKELEMATA S.R.L.\tA\n" in out
+    assert "000000001\tMED 1\tpack\tHOLDER\tS\n" in out

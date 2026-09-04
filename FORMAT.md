@@ -82,3 +82,11 @@ bundle it has.
 ## aviation.txt.gz
 
 One line per IATA code: `kind<TAB>code<TAB>name`, kind `A` for an airport and `L` for an airline, from Wikidata (CC0). Optional for the phone: a missing file only leaves boarding passes with their codes.
+
+## postal.txt.gz
+
+One line per postal code: `country<TAB>code<TAB>place<TAB>region<TAB>lat<TAB>lng`, from the GeoNames postal code files for the countries whose postal barcodes the reader decodes (CC BY 4.0). Optional for the phone.
+
+## aic.txt.gz
+
+One line per Italian medicine pack: `aic<TAB>name<TAB>pack<TAB>holder<TAB>status`, status A authorised, S suspended, R revoked, from the AIFA list of authorised medicines (CC BY 4.0). Optional for the phone.
