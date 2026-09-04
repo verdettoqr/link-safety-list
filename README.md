@@ -35,6 +35,8 @@ Reference data, plain text:
 | [Unicode confusables](https://www.unicode.org/Public/security/latest/) | Lookalike names: characters that imitate ASCII letters | Unicode license |
 | [Majestic Million](https://majestic.com/reports/majestic-million) top 10,000 | "Popular site" notes and the targets of lookalike detection | CC BY 3.0 (replaced Tranco on 2026-09-03: its default list mixes CC BY-NC and CC BY-SA inputs) |
 | [Wikidata](https://www.wikidata.org/) IATA codes | Airport (P238) and airline (P229) names, shown on boarding passes in place of codes; a code held by several items goes to the best-known one (sitelinks, then the shorter name) | CC0 |
+| [GeoNames](https://www.geonames.org/) postal codes | Place and region behind a postal barcode (US, GB, NL, JP, BR, DE, KR files) | CC BY 4.0 |
+| [AIFA](https://www.aifa.gov.it/) authorised medicines | Medicine, pack, and holder behind an Italian pharmacode (Code 32) | CC BY 4.0 |
 
 URLs, hosts, and addresses are normalized the way the app normalizes a
 scanned code, hashed with SHA-256, and only a short prefix is kept, so
@@ -128,3 +130,5 @@ The bundle is a collection; each asset keeps its source's terms.
 - `confusables.txt.gz` is derived from the Unicode confusables data. Copyright (c) 1991-2025 Unicode, Inc. Licensed under the Unicode License v3 (https://www.unicode.org/license.txt).
 - `brands.txt.gz` is derived from the Majestic Million (https://majestic.com/reports/majestic-million), CC BY 3.0.
 - `aviation.txt.gz` is built from Wikidata's IATA airport and airline codes and labels (https://www.wikidata.org/), CC0.
+- `postal.txt.gz` is derived from the GeoNames postal code files (https://www.geonames.org/), Creative Commons Attribution 4.0.
+- `aic.txt.gz` is derived from the Italian Medicines Agency's list of authorised medicines (https://www.aifa.gov.it/), CC BY 4.0.
