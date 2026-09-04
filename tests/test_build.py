@@ -41,6 +41,12 @@ def test_normalize_matches_the_app_rule():
     assert normalize("http://[2001:DB8::1]:8080/") == "http://[2001:db8::1]:8080/"
     assert build_list.ipv4_canonical("1234.com") is None
     assert build_list.ipv4_canonical("256.1.1.1") is None
+    # the same rejection and edge vectors as UrlCanonTest
+    for bad in ("mailto:a@b.c", "ftp://example.com/", "https://", "javascript:alert(1)", "not a url", ""):
+        assert normalize(bad) is None, bad
+    assert normalize("\u0085https://example.com/") is None
+    assert normalize("https://example.com/\u0085") == "https://example.com/%C2%85"
+    assert normalize("https://%58\U0001F600.example.com/") == "https://x\U0001F600.example.com/"
 
 
 def test_normalize_rejects_non_web_addresses():

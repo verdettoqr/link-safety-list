@@ -180,7 +180,7 @@ def normalize(url: str) -> str | None:
     trimmed; a numeric IPv4 host written dotted-decimal; dot segments resolved and duplicate slashes collapsed;
     unreserved escapes decoded, other escapes uppercased; controls, spaces, non-ASCII, and unsafe characters
     percent-encoded; the query kept in order under the same escaping. None for anything that is not http(s)."""
-    t = "".join(ch for ch in url.strip() if ch not in "\t\n\r")
+    t = "".join(ch for ch in url.strip(" \t\n\r") if ch not in "\t\n\r")
     scheme_end = t.find("://")
     if scheme_end <= 0:
         return None
