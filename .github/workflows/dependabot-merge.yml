@@ -1,0 +1,62 @@
+name: Merge Dependabot action updates
+
+# Keeps the commit-pinned actions in build.yml current without a person in the loop:
+# Dependabot opens the pull request, this job runs the test suite on it, and if the
+# update is a minor or patch release of a GitHub-owned action it merges. Major
+# versions and anything not under actions/ stay open for a human. Workflows that
+# Dependabot triggers get a read-only token unless permissions are declared, hence
+# the explicit block; the list-signing secret is not exposed to this workflow.
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: dependabot-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-merge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Test
+        run: python -m pytest -q
+
+      - name: Read the update
+        id: meta
+        uses: dependabot/fetch-metadata@21025c705c08248db411dc16f3619e6b5f9ea21a # v2.5.0
+
+      - name: Merge a minor or patch update of a GitHub-owned action
+        if: >-
+          steps.meta.outputs.package-ecosystem == 'github_actions' &&
+          startsWith(steps.meta.outputs.dependency-names, 'actions/') &&
+          (steps.meta.outputs.update-type == 'version-update:semver-minor' ||
+           steps.meta.outputs.update-type == 'version-update:semver-patch')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --squash --delete-branch "$PR"
+
+      - name: Leave the rest for a person
+        if: >-
+          !(steps.meta.outputs.package-ecosystem == 'github_actions' &&
+            startsWith(steps.meta.outputs.dependency-names, 'actions/') &&
+            (steps.meta.outputs.update-type == 'version-update:semver-minor' ||
+             steps.meta.outputs.update-type == 'version-update:semver-patch'))
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.html_url }}
+        run: gh pr comment "$PR" --body "Tests pass. Not merged automatically: this is a major version or not a GitHub-owned action, so it waits for a person."
