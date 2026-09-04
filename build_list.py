@@ -64,9 +64,10 @@ REFERENCE = {
     "confusables": "https://www.unicode.org/Public/security/latest/confusables.txt",
     "brands": "https://downloads.majestic.com/majestic_million.csv",
     "aviation": "https://query.wikidata.org/sparql?format=json&query=" + (
-        "SELECT%20%3Fcode%20%3Fkind%20%3Fname%20WHERE%20%7B%20%7B%20%3Fitem%20wdt%3AP238%20%3Fcode%20.%20BIND(%22A%22%20AS%20%3Fkind)%20"
+        "SELECT%20%3Fcode%20%3Fkind%20%3Fname%20%3Flinks%20WHERE%20%7B%20%7B%20%3Fitem%20wdt%3AP238%20%3Fcode%20.%20BIND(%22A%22%20AS%20%3Fkind)%20"
         "%3Fitem%20rdfs%3Alabel%20%3Fname%20.%20FILTER(LANG(%3Fname)%20%3D%20%22en%22)%20%7D%20UNION%20%7B%20%3Fitem%20wdt%3AP229%20%3Fcode%20.%20"
-        "BIND(%22L%22%20AS%20%3Fkind)%20%3Fitem%20rdfs%3Alabel%20%3Fname%20.%20FILTER(LANG(%3Fname)%20%3D%20%22en%22)%20%7D%20%7D"
+        "BIND(%22L%22%20AS%20%3Fkind)%20%3Fitem%20rdfs%3Alabel%20%3Fname%20.%20FILTER(LANG(%3Fname)%20%3D%20%22en%22)%20%7D%20"
+        "OPTIONAL%20%7B%20%3Fitem%20wikibase%3Asitelinks%20%3Flinks%20%7D%20%7D"
     ),
 }
 
@@ -491,7 +492,7 @@ def build_aviation(data: bytes) -> str:
     """Wikidata (CC0): IATA airport codes (P238) and airline codes (P229) with English labels, one per line as
     kind<TAB>code<TAB>name, A for airports and L for airlines; the phone shows names on boarding passes."""
     doc = json.loads(data.decode("utf-8"))
-    rows: dict[tuple[str, str], str] = {}
+    best: dict[tuple[str, str], tuple[int, str]] = {}
     for b in doc.get("results", {}).get("bindings", []):
         kind = b.get("kind", {}).get("value", "")
         code = b.get("code", {}).get("value", "").strip().upper()
@@ -502,7 +503,18 @@ def build_aviation(data: bytes) -> str:
             continue
         if kind == "L" and not (len(code) == 2 and code.isalnum()):
             continue
-        rows.setdefault((kind, code), name)
+        try:
+            links = int(b.get("links", {}).get("value", "0"))
+        except ValueError:
+            links = 0
+        # a code shared by several items (AC: Air Canada and its charter arm) goes to the best-known one,
+        # measured by Wikipedia sitelinks, then the shorter name
+        key = (links, -len(name))
+        if (kind, code) not in best or key > best[(kind, code)][0]:
+            best[(kind, code)] = (key, name)
+    rows = {k: v[1] for k, v in best.items()}
+    if len(rows) < 1000:
+        raise ValueError(f"aviation: only {len(rows)} rows, the query service answered short")
     return "\n".join(f"{k}\t{c}\t{n}" for (k, c), n in sorted(rows.items())) + "\n"
 
 
