@@ -13,7 +13,7 @@ Reference data, always built:
   psl          Mozilla's Public Suffix List (MPL 2.0), so the phone computes registrable domains correctly.
   shorteners   URL shortener hosts (PeterDaveHello/url-shorteners).
   confusables  Unicode confusables, kept to the mappings whose target is ASCII, for lookalike detection.
-  brands       The top 10,000 domains from the Tranco list, for "popular site" notes and lookalike targets.
+  brands       The top 10,000 domains from the Majestic Million (CC BY 3.0), for "popular site" notes and lookalike targets.
 
 Output (in --out): list.bin (LSL2: sorted SHA-256 prefixes for URLs, hosts, addresses), psl.txt.gz,
 shorteners.txt.gz, confusables.txt.gz, brands.txt.gz, list.json (the manifest: every asset's SHA-256
@@ -194,9 +194,9 @@ def ipv4_canonical(h: str) -> str | None:
 
 
 def normalize(url: str) -> str | None:
-    """Canonicalization v3, the same rule as the app's UrlCanon: tabs and line breaks dropped; scheme and host
+    """Canonicalization v4, the same rule as the app's UrlCanon: tabs and line breaks dropped; scheme and host
     lowercased; user info and fragment dropped; the default port dropped; host escapes decoded, dots collapsed and
-    trimmed; a numeric IPv4 host written dotted-decimal; dot segments resolved and duplicate slashes collapsed;
+    trimmed, a non-ASCII host converted to its IDNA ASCII form; a numeric IPv4 host written dotted-decimal; dot segments resolved and duplicate slashes collapsed;
     unreserved escapes decoded, other escapes uppercased; controls, spaces, non-ASCII, and unsafe characters
     percent-encoded; the query kept in order under the same escaping. None for anything that is not http(s)."""
     t = "".join(ch for ch in url.strip(" \t\n\r") if ch not in "\t\n\r")
@@ -261,6 +261,13 @@ def normalize(url: str) -> str | None:
             h = h.replace("..", ".")
         if not h:
             return None
+        if not h.isascii():
+            # v4: an internationalized host is hashed in its IDNA ASCII (punycode) form, the spelling the feeds
+            # store, so a QR code carrying the Unicode spelling still matches a listed phish
+            try:
+                h = h.encode("idna").decode("ascii")
+            except UnicodeError:
+                pass
         ip = ipv4_canonical(h)
         if ip is not None:
             h = ip
@@ -715,7 +722,7 @@ def main() -> int:
         "sources": {k: v for k, v in report.items() if k != "psl_fetched_at"},
         "psl_fetched_at": int(report.get("psl_fetched_at", 0)),
         "normalization": {
-            "url": "v3: tabs and line breaks dropped; scheme and host lowercased; user info and fragment dropped; default port dropped; host escapes decoded, dots collapsed and trimmed; numeric IPv4 hosts dotted-decimal; dot segments resolved, duplicate slashes collapsed; unreserved escapes decoded, others uppercased; controls, spaces, non-ASCII, and unsafe characters percent-encoded; query kept in order",
+            "url": "v4: tabs and line breaks dropped; scheme and host lowercased; user info and fragment dropped; default port dropped; host escapes decoded, dots collapsed and trimmed, a non-ASCII host converted to its IDNA ASCII form; numeric IPv4 hosts dotted-decimal; dot segments resolved, duplicate slashes collapsed; unreserved escapes decoded, others uppercased; controls, spaces, non-ASCII, and unsafe characters percent-encoded; query kept in order",
             "host": "lowercased, no trailing dot; the phone checks the host and each parent domain down to the registrable domain",
             "address": "trimmed; 0x EVM addresses lowercased",
         },

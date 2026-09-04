@@ -32,15 +32,17 @@ no false positives in practice, and nothing readable inside.
 
 ## Normalization (the app mirrors each rule)
 
-URL, version 3 (2026-09-03; the app's `UrlCanon` and `normalize()` here are
+URL, version 4 (2026-09-04; the app's `UrlCanon` and `normalize()` here are
 one rule, held together by identical test vectors):
 
 1. Tabs and line breaks dropped; surrounding spaces trimmed.
 2. Scheme and host lowercased; only `http` and `https` are listed.
 3. User info (`user:pass@`) and the fragment dropped.
 4. The default port (80 for http, 443 for https) dropped; other ports kept.
-5. Host: percent-escapes decoded, dots collapsed and trimmed; a numeric IPv4
-   host in any form (hex, octal, decimal, short) written dotted-decimal.
+5. Host: percent-escapes decoded, dots collapsed and trimmed; a non-ASCII
+   host converted to its IDNA ASCII (punycode) form, the spelling the feeds
+   store (v4, 2026-09-04); a numeric IPv4 host in any form (hex, octal,
+   decimal, short) written dotted-decimal.
 6. Path: `/` when empty; `.` and `..` resolved; duplicate slashes collapsed;
    a trailing slash kept.
 7. Percent-escapes: unreserved ones (letters, digits, `-` `.` `_` `~`)

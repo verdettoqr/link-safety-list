@@ -46,7 +46,7 @@ def test_normalize_matches_the_app_rule():
         assert normalize(bad) is None, bad
     assert normalize("\u0085https://example.com/") is None
     assert normalize("https://example.com/\u0085") == "https://example.com/%C2%85"
-    assert normalize("https://%58\U0001F600.example.com/") == "https://x\U0001F600.example.com/"
+    assert normalize("https://%58\U0001F600.example.com/") == "https://xn--x-jv3s.example.com/"  # v4: the host is punycode
 
 
 def test_normalize_rejects_non_web_addresses():
@@ -256,3 +256,12 @@ def test_fetch_does_not_retry_forbidden(monkeypatch):
     with pytest.raises(urllib.error.HTTPError):
         build_list.fetch("https://example.test/list.json")
     assert calls == [1]
+
+
+def test_normalize_v4_idna_host():
+    # v4: a Unicode host hashes in its punycode spelling, the one the feeds store; the app's UrlCanonTest has the same vectors
+    assert normalize("https://пример.рф/") == "https://xn--e1afmkfd.xn--p1ai/"
+    assert normalize("https://Bücher.example/x") == "https://xn--bcher-kva.example/x"
+    assert normalize("https://xn--e1afmkfd.xn--p1ai/") == "https://xn--e1afmkfd.xn--p1ai/"
+    assert normalize("https://%D0%BF%D1%80%D0%B8%D0%BC%D0%B5%D1%80.%D1%80%D1%84/") == "https://xn--e1afmkfd.xn--p1ai/"
+    assert normalize("https://paypal.com/") == "https://paypal.com/"

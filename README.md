@@ -124,7 +124,7 @@ Added 2026-09-03 after a search for feeds with outright-permissive terms: PhishD
 
 The bundle is a collection; each asset keeps its source's terms.
 
-- PhishTank data from OpenDNS/Cisco (https://www.phishtank.com/), fetched with an application key and a descriptive user agent; available for commercial use without charge.
+- PhishTank data from OpenDNS/Cisco (https://www.phishtank.com/), fetched with an application key and a descriptive user agent. PhishTank's archived OpenDNS terms state that the Data is available for commercial use without charge; since a date this project has not established, the terms page points to Cisco's general End User License Agreement and heads the OpenDNS text "Archived Terms of Use" (checked 2026-09-04). A clarification of the bulk feed's terms for a commercial app was requested from PhishTank on 2026-09-04; the source is fetched on its own so it can be dropped in one line if the answer requires it.
 - The CERT Polska warning list (https://cert.pl/lista-ostrzezen/) is published by NASK-PIB; the open-data copy is CC0 1.0.
 - PhishDestroy destroylist (https://github.com/phishdestroy/destroylist), MIT License, Copyright (c) PhishDestroy.
 - PhishIndex blocklist (https://github.com/PhishIndex/phishindex-blocklist), MIT License.
