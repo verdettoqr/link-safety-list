@@ -32,6 +32,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import struct
 import sys
 import time
@@ -533,7 +534,8 @@ def parse_postal_txt(country: str, text: str) -> dict[tuple[str, str], str]:
         f = line.split("\t")
         if len(f) < 11 or f[0] != country:
             continue
-        code = f[1].strip().upper()
+        # digits and letters only: GeoNames writes Japanese and Brazilian codes with a hyphen, the barcodes carry none
+        code = re.sub("[^A-Z0-9]", "", f[1].strip().upper())
         place = f[2].strip()
         if not code or not place:
             continue
