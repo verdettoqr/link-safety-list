@@ -1,0 +1,2 @@
+# own/addresses.txt: verified addresses from reports
+# One entry per line, then: # YYYY-MM-DD case-id evidence in one line. See README.md in this folder.

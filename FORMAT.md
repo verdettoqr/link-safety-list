@@ -74,7 +74,7 @@ Address: trimmed; 0x EVM addresses lowercased.
 
 `format`, `version` (equals generated-at), `generated_at` (ISO 8601),
 `prefix_bytes`, `assets` (per file: `sha256`, `bytes`, and counts),
-`sources` (per source: fetched, count, seconds or error), `normalization`,
+`sources` (per source: fetched, count, seconds or error; `own` also lists its expired entries and `allow` how many listings it suppressed), `normalization`,
 then `signature` and `public_key`. The signature is Ed25519 over the
 canonical manifest: the manifest without `signature` and `public_key`,
 JSON with keys sorted and no whitespace. The phone verifies the manifest

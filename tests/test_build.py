@@ -265,3 +265,52 @@ def test_normalize_v4_idna_host():
     assert normalize("https://xn--e1afmkfd.xn--p1ai/") == "https://xn--e1afmkfd.xn--p1ai/"
     assert normalize("https://%D0%BF%D1%80%D0%B8%D0%BC%D0%B5%D1%80.%D1%80%D1%84/") == "https://xn--e1afmkfd.xn--p1ai/"
     assert normalize("https://paypal.com/") == "https://paypal.com/"
+
+
+def test_own_entries_are_hashed_and_expired_ones_dropped(tmp_path):
+    from datetime import date
+
+    own = tmp_path / "own"
+    own.mkdir()
+    (own / "urls.txt").write_text("# header\nhttps://Evil.example/login  # 2026-09-01 case-1 credential form imitating a bank\n"
+                                  "https://old.example/  # 2026-01-01 case-0 expired long ago\n", encoding="utf-8")
+    (own / "hosts.txt").write_text("scam.example  # 2026-09-01 case-2 whole domain a fake shop\n", encoding="utf-8")
+    urls, hosts, addresses, report = build_list.collect(set(build_list.BLOCKLISTS), own_dir=str(own), today=date(2026, 9, 4))
+    assert prefix("https://evil.example/login", URL_PREFIX) in urls
+    assert prefix("https://old.example/", URL_PREFIX) not in urls
+    assert prefix("scam.example", HOST_PREFIX) in hosts
+    assert report["own"]["count"] == 2
+    assert report["own"]["expired"] == ["https://old.example/"]
+    assert report["allow"]["count"] == 0
+
+
+def test_allow_suppresses_a_listing_from_any_source(tmp_path):
+    from datetime import date
+
+    own = tmp_path / "own"
+    own.mkdir()
+    (own / "allow.txt").write_text("shared.example  # 2026-09-01 case-9 false positive; the page is clean\n"
+                                   "https://ok.example/path  # 2026-09-01 case-8 clean page, listed by mistake\n", encoding="utf-8")
+    (own / "hosts.txt").write_text("sub.shared.example  # 2026-09-01 case-3 x\n", encoding="utf-8")
+    (own / "urls.txt").write_text("https://ok.example/path  # 2026-09-01 case-4 y\nhttps://ok.example/other  # 2026-09-01 case-5 z\n"
+                                  "https://deep.shared.example/x  # 2026-09-01 case-6 under an allowed host\n", encoding="utf-8")
+    urls, hosts, addresses, report = build_list.collect(set(build_list.BLOCKLISTS), own_dir=str(own), today=date(2026, 9, 4))
+    assert prefix("sub.shared.example", HOST_PREFIX) not in hosts
+    assert prefix("https://ok.example/path", URL_PREFIX) not in urls
+    assert prefix("https://ok.example/other", URL_PREFIX) in urls
+    assert prefix("https://deep.shared.example/x", URL_PREFIX) not in urls
+    assert report["allow"]["count"] == 2
+    assert report["allow"]["suppressed"] == 3
+
+
+def test_own_line_without_a_date_or_case_fails():
+    from datetime import date
+
+    import pytest
+
+    with pytest.raises(ValueError):
+        build_list.read_dated_lines("https://x.example/  # no date here\n", date(2026, 9, 4), 90, "t")
+    with pytest.raises(ValueError):
+        build_list.read_dated_lines("https://x.example/  # 2026-09-01\n", date(2026, 9, 4), 90, "t")
+    live, expired = build_list.read_dated_lines("# comment only\n\nhttps://x.example/  # 2026-09-01 case-1 fine\n", date(2026, 9, 4), 90, "t")
+    assert live == ["https://x.example/"] and expired == []

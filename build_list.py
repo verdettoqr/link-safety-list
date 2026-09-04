@@ -39,7 +39,7 @@ import time
 import urllib.error
 import urllib.request
 import zipfile
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from urllib.parse import urlsplit
 
 MAGIC = b"LSL2"
@@ -52,6 +52,9 @@ RETRY_DELAY = 30.0          # seconds before the second attempt; the third waits
 RETRY_STATUS = {404, 408, 425, 429, 500, 502, 503, 504}   # answers worth a retry; 403 is not one
 UA = "link-safety-list/2.0 (+https://github.com/verdettoqr/link-safety-list)"
 BRANDS_TOP = 10_000
+OWN_DIR = "own"             # our own entries, each verified by a person: urls.txt, hosts.txt, addresses.txt, allow.txt
+OWN_MAX_AGE_DAYS = 90       # an own entry expires unless its date is renewed; fresh scam domains die young
+ALLOW_MAX_AGE_DAYS = 180    # an allow entry (a listing suppressed after review) expires unless renewed
 
 BLOCKLISTS = {
     "phishtank": "http://data.phishtank.com/data/{key}online-valid.json.gz",
@@ -393,12 +396,78 @@ def read_json_list(data: bytes) -> list[str]:
     return [str(r) for r in json.loads(data.decode("utf-8")) if isinstance(r, str)]
 
 
-def collect(skip: set[str]) -> tuple[set[bytes], set[bytes], set[bytes], dict]:
+def read_dated_lines(text: str, today: date, max_age_days: int, label: str) -> tuple[list[str], list[str]]:
+    """Entries of an own file, one per line: `entry  # YYYY-MM-DD case-id evidence...`. Blank lines and lines that
+    start with # are ignored. Returns (live, expired) by the date in the comment. A line without a date or a case
+    id is an error, so the tests catch it before a build does."""
+    live: list[str] = []
+    expired: list[str] = []
+    for n, raw in enumerate(text.splitlines(), 1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        entry, sep, comment = line.partition("#")
+        entry = entry.strip()
+        if not sep or not entry:
+            raise ValueError(f"{label} line {n}: expected `entry  # YYYY-MM-DD case-id evidence`")
+        parts = comment.split()
+        try:
+            stamp = date.fromisoformat(parts[0]) if parts else None
+        except ValueError:
+            stamp = None
+        if stamp is None:
+            raise ValueError(f"{label} line {n}: the comment must start with the date, YYYY-MM-DD")
+        if len(parts) < 2:
+            raise ValueError(f"{label} line {n}: the comment needs a case id after the date")
+        (expired if (today - stamp).days > max_age_days else live).append(entry)
+    return live, expired
+
+
+class Allow:
+    """Entries suppressed after a review, whatever source lists them: exact URLs, and hosts with everything under
+    them. Applied when an entry is added, before hashing, so a feed's false positive never reaches a phone."""
+
+    def __init__(self, entries: list[str]):
+        self.urls: set[str] = set()
+        self.hosts: set[str] = set()
+        self.suppressed = 0
+        for e in entries:
+            if "://" in e:
+                n = normalize(e)
+                if not n:
+                    raise ValueError(f"allow entry is not an http(s) URL: {e!r}")
+                self.urls.add(n)
+            else:
+                h = normalize_host(e)
+                if not h:
+                    raise ValueError(f"allow entry is not a host: {e!r}")
+                self.hosts.add(h)
+
+    def host_allowed(self, host: str) -> bool:
+        labels = host.split(".")
+        return any(".".join(labels[i:]) in self.hosts for i in range(len(labels)))
+
+    def url_allowed(self, url: str) -> bool:
+        return url in self.urls or self.host_allowed(urlsplit(url).hostname or "")
+
+
+def collect(skip: set[str], own_dir: str | None = OWN_DIR, today: date | None = None) -> tuple[set[bytes], set[bytes], set[bytes], dict]:
     urls: set[bytes] = set()
     hosts: set[bytes] = set()
     addresses: set[bytes] = set()
     report: dict = {}
     key = env("PHISHTANK_APP_KEY")
+    today = today or datetime.now(timezone.utc).date()
+
+    def own_text(name: str) -> str:
+        path = os.path.join(own_dir, name) if own_dir else None
+        if not path or not os.path.exists(path):
+            return ""
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+
+    allow_live, allow_expired = read_dated_lines(own_text("allow.txt"), today, ALLOW_MAX_AGE_DAYS, "own/allow.txt")
+    allow = Allow(allow_live)
 
     def run(name: str, url: str, ua: str, parse, add) -> None:
         t0 = time.time()
@@ -411,15 +480,23 @@ def collect(skip: set[str]) -> tuple[set[bytes], set[bytes], set[bytes], dict]:
 
     def add_url(u: str) -> bool:
         n = normalize(u)
-        if n:
-            urls.add(prefix(n, URL_PREFIX))
-        return bool(n)
+        if not n:
+            return False
+        if allow.url_allowed(n):
+            allow.suppressed += 1
+            return False
+        urls.add(prefix(n, URL_PREFIX))
+        return True
 
     def add_host(h: str) -> bool:
         n = normalize_host(h)
-        if n:
-            hosts.add(prefix(n, HOST_PREFIX))
-        return bool(n)
+        if not n:
+            return False
+        if allow.host_allowed(n):
+            allow.suppressed += 1
+            return False
+        hosts.add(prefix(n, HOST_PREFIX))
+        return True
 
     def add_address(a: str) -> bool:
         n = normalize_address(a)
@@ -444,6 +521,16 @@ def collect(skip: set[str]) -> tuple[set[bytes], set[bytes], set[bytes], dict]:
             run("ofac_addresses", url, UA, read_ofac_addresses, add_address)
         else:
             run(name, url, UA, read_lines, add_url)
+
+    # our own entries, verified by a person (own/README.md): the seventh source, hashed like the feeds
+    own_counts: dict[str, int] = {}
+    own_expired: list[str] = []
+    for kind, add in (("urls", add_url), ("hosts", add_host), ("addresses", add_address)):
+        live, expired = read_dated_lines(own_text(f"{kind}.txt"), today, OWN_MAX_AGE_DAYS, f"own/{kind}.txt")
+        own_counts[kind] = sum(1 for e in live if add(e))
+        own_expired.extend(expired)
+    report["own"] = {"fetched": True, "count": sum(own_counts.values()), "seconds": 0, "by_kind": own_counts, "expired": own_expired[:50]}
+    report["allow"] = {"fetched": True, "count": len(allow_live), "seconds": 0, "suppressed": allow.suppressed, "expired": allow_expired[:50]}
     return urls, hosts, addresses, report
 
 
@@ -685,9 +772,11 @@ def main() -> int:
     ap.add_argument("--out", default="dist")
     ap.add_argument("--skip", action="append", default=[], choices=sorted(BLOCKLISTS))
     ap.add_argument("--min-entries", type=int, default=1000, help="refuse to publish with fewer URL entries than this")
+    ap.add_argument("--own-dir", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), OWN_DIR),
+                    help="the folder with our own verified entries (urls.txt, hosts.txt, addresses.txt, allow.txt)")
     args = ap.parse_args()
 
-    urls, hosts, addresses, report = collect(set(args.skip))
+    urls, hosts, addresses, report = collect(set(args.skip), own_dir=args.own_dir)
     if not any(r["fetched"] for n, r in report.items() if n in BLOCKLISTS):
         print("no blocklist source could be fetched; nothing published", file=sys.stderr)
         print(json.dumps(report, indent=2), file=sys.stderr)

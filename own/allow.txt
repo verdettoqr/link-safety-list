@@ -1,0 +1,2 @@
+# own/allow.txt: entries suppressed after review (exact URLs, or hosts with their subdomains)
+# One entry per line, then: # YYYY-MM-DD case-id evidence in one line. See README.md in this folder.

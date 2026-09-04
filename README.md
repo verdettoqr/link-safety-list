@@ -24,6 +24,7 @@ Blocklists, hashed:
 | [PhishDestroy destroylist](https://github.com/phishdestroy/destroylist) | Phishing and scam domains, crypto-heavy, community and own detection | MIT |
 | [PhishIndex blocklist](https://github.com/PhishIndex/phishindex-blocklist) | Malicious domains from PhishIndex's own detection (their aggregate list is not used) | MIT |
 | [polkadot-js phishing](https://github.com/polkadot-js/phishing) | Crypto scam domains (deny list) and scam wallet addresses (Substrate SS58) | Apache-2.0 |
+| [Verdetto's own entries](own/README.md) | Links, hosts, and addresses verified by a person from reports sent through the app and the site, each with a dated evidence line; entries expire after 90 days unless renewed; `allow.txt` suppresses a listing from any source after a review | CC0 1.0 |
 | [OFAC SDN list](https://ofac.treasury.gov/specially-designated-nationals-and-blocked-persons-list-sdn-human-readable-lists) (US Treasury) | Sanctioned digital-currency addresses (Bitcoin, Ethereum, Tron, Tether, and others), from the official Sanctions List Service | US government work, public domain (17 U.S.C. 105); no Treasury seal or logo is used |
 
 Reference data, plain text:
@@ -44,6 +45,18 @@ the bundle holds nothing readable and a lookup cannot produce a false
 positive the way a Bloom filter can. Hosts are listed as full domains
 that cover their subdomains; a shared host such as a cloud drive is
 never listed because one page on it was bad. See [FORMAT.md](FORMAT.md).
+
+## Our own entries, and getting one removed
+
+The `own/` folder is the seventh source: entries a person at Verdetto verified
+from reports, one per line with the date, the case id, and the evidence in a
+comment ([own/README.md](own/README.md)). Nothing enters it from a report
+count or a score; a label on a reviewed case commits the entry, the push
+builds, and phones pick the bundle up at their next check. Entries expire
+after 90 days unless renewed. `own/allow.txt` suppresses an entry from any
+source after a review, so a public feed's false positive stops warning the
+same day: report a mistaken listing at https://verdettoqr.com/report or write
+to support@verdettoqr.com. The own data is CC0.
 
 ## Where to get it
 
