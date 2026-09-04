@@ -42,9 +42,12 @@ def main() -> int:
     with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "link-safety-list-intake/1.0"}), timeout=60) as r:
         text = r.read().decode("utf-8-sig", errors="replace")
     rows = list(csv.reader(io.StringIO(text)))
-    if not rows:
-        print("empty feed")
+    # the published tab may start with blank rows before the header; the header row starts with Timestamp
+    start = next((i for i, r in enumerate(rows) if r and r[0].strip() == "Timestamp"), None)
+    if start is None:
+        print("empty feed or no header")
         return 0
+    rows = rows[start:]
     header = [h.strip() for h in rows[0]]
     dispatched = skipped = feedback = 0
     for row in rows[1:]:
