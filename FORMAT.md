@@ -78,3 +78,7 @@ canonical manifest: the manifest without `signature` and `public_key`,
 JSON with keys sorted and no whitespace. The phone verifies the manifest
 first, then each asset against its SHA-256, and only then replaces the
 bundle it has.
+
+## aviation.txt.gz
+
+One line per IATA code: `kind<TAB>code<TAB>name`, kind `A` for an airport and `L` for an airline, from Wikidata (CC0). Optional for the phone: a missing file only leaves boarding passes with their codes.
