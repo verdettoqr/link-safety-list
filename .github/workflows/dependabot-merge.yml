@@ -39,24 +39,31 @@ jobs:
         id: meta
         uses: dependabot/fetch-metadata@21025c705c08248db411dc16f3619e6b5f9ea21a # v2.5.0
 
-      - name: Merge a minor or patch update of a GitHub-owned action
-        if: >-
-          steps.meta.outputs.package-ecosystem == 'github_actions' &&
-          startsWith(steps.meta.outputs.dependency-names, 'actions/') &&
-          (steps.meta.outputs.update-type == 'version-update:semver-minor' ||
-           steps.meta.outputs.update-type == 'version-update:semver-patch')
+      # One decision, computed once: a minor or patch release of a GitHub-owned action merges itself.
+      - name: Decide
+        id: decide
+        env:
+          ECOSYSTEM: ${{ steps.meta.outputs.package-ecosystem }}
+          NAMES: ${{ steps.meta.outputs.dependency-names }}
+          KIND: ${{ steps.meta.outputs.update-type }}
+        run: |
+          merge=false
+          case "$KIND" in version-update:semver-minor|version-update:semver-patch) small=true ;; *) small=false ;; esac
+          if [ "$ECOSYSTEM" = "github_actions" ] && [ "$small" = true ] && [ "${NAMES#actions/}" != "$NAMES" ]; then merge=true; fi
+          echo "merge=$merge" >> "$GITHUB_OUTPUT"
+          echo "ecosystem=$ECOSYSTEM names=$NAMES kind=$KIND merge=$merge"
+
+      - name: Merge
+        if: steps.decide.outputs.merge == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.html_url }}
         run: gh pr merge --squash --delete-branch "$PR"
 
-      - name: Leave the rest for a person
-        if: >-
-          !(steps.meta.outputs.package-ecosystem == 'github_actions' &&
-            startsWith(steps.meta.outputs.dependency-names, 'actions/') &&
-            (steps.meta.outputs.update-type == 'version-update:semver-minor' ||
-             steps.meta.outputs.update-type == 'version-update:semver-patch'))
+      - name: Leave it for a person
+        if: steps.decide.outputs.merge != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.html_url }}
-        run: gh pr comment "$PR" --body "Tests pass. Not merged automatically: this is a major version or not a GitHub-owned action, so it waits for a person."
+        run: |
+          gh pr comment "$PR" --body 'Tests pass. Not merged automatically because this is a major version or not a GitHub-owned action, so it waits for a person.'
