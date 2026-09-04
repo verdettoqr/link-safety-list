@@ -63,6 +63,11 @@ REFERENCE = {
     "shorteners": "https://raw.githubusercontent.com/PeterDaveHello/url-shorteners/master/list",
     "confusables": "https://www.unicode.org/Public/security/latest/confusables.txt",
     "brands": "https://downloads.majestic.com/majestic_million.csv",
+    "aviation": "https://query.wikidata.org/sparql?format=json&query=" + (
+        "SELECT%20%3Fcode%20%3Fkind%20%3Fname%20WHERE%20%7B%20%7B%20%3Fitem%20wdt%3AP238%20%3Fcode%20.%20BIND(%22A%22%20AS%20%3Fkind)%20"
+        "%3Fitem%20rdfs%3Alabel%20%3Fname%20.%20FILTER(LANG(%3Fname)%20%3D%20%22en%22)%20%7D%20UNION%20%7B%20%3Fitem%20wdt%3AP229%20%3Fcode%20.%20"
+        "BIND(%22L%22%20AS%20%3Fkind)%20%3Fitem%20rdfs%3Alabel%20%3Fname%20.%20FILTER(LANG(%3Fname)%20%3D%20%22en%22)%20%7D%20%7D"
+    ),
 }
 
 
@@ -482,8 +487,27 @@ def previous_psl(now: int) -> tuple[bytes, int] | None:
         return None
 
 
+def build_aviation(data: bytes) -> str:
+    """Wikidata (CC0): IATA airport codes (P238) and airline codes (P229) with English labels, one per line as
+    kind<TAB>code<TAB>name, A for airports and L for airlines; the phone shows names on boarding passes."""
+    doc = json.loads(data.decode("utf-8"))
+    rows: dict[tuple[str, str], str] = {}
+    for b in doc.get("results", {}).get("bindings", []):
+        kind = b.get("kind", {}).get("value", "")
+        code = b.get("code", {}).get("value", "").strip().upper()
+        name = b.get("name", {}).get("value", "").strip()
+        if kind not in ("A", "L") or not name:
+            continue
+        if kind == "A" and not (len(code) == 3 and code.isalpha()):
+            continue
+        if kind == "L" and not (len(code) == 2 and code.isalnum()):
+            continue
+        rows.setdefault((kind, code), name)
+    return "\n".join(f"{k}\t{c}\t{n}" for (k, c), n in sorted(rows.items())) + "\n"
+
+
 def build_reference(report: dict) -> dict[str, bytes]:
-    builders = {"psl": build_psl, "shorteners": build_shorteners, "confusables": build_confusables, "brands": build_brands}
+    builders = {"psl": build_psl, "shorteners": build_shorteners, "confusables": build_confusables, "brands": build_brands, "aviation": build_aviation}
     out: dict[str, bytes] = {}
     now = int(time.time())
     for name, url in REFERENCE.items():

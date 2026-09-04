@@ -131,3 +131,15 @@ def test_ofac_reader():
            b'<id><uid>4</uid><idType>Digital Currency Address - ETH</idType><idNumber>0xAbC0000000000000000000000000000000000001</idNumber></id>'
            b'</idList></sdnEntry></sdnList>')
     assert build_list.read_ofac_addresses(xml) == ["1abcDEF", "0xAbC0000000000000000000000000000000000001"]
+
+
+def test_aviation_builder():
+    doc = {"results": {"bindings": [
+        {"kind": {"value": "A"}, "code": {"value": "yul"}, "name": {"value": "Montreal-Trudeau International Airport"}},
+        {"kind": {"value": "L"}, "code": {"value": "AC"}, "name": {"value": "Air Canada"}},
+        {"kind": {"value": "A"}, "code": {"value": "TOOLONG"}, "name": {"value": "x"}},
+        {"kind": {"value": "L"}, "code": {"value": "AC"}, "name": {"value": "duplicate"}},
+    ]}}
+    import json as _json
+    out = build_list.build_aviation(_json.dumps(doc).encode("utf-8"))
+    assert out == "A\tYUL\tMontreal-Trudeau International Airport\nL\tAC\tAir Canada\n"
