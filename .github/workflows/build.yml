@@ -54,3 +54,41 @@ jobs:
           # every built file, so a new reference asset can never be listed in the manifest and left unuploaded
           gh release upload current dist/* --clobber
           python -c "import json;m=json.load(open('dist/list.json'));a=m['assets']['list.bin'];print('published',a['url_count'],'urls',a['host_count'],'hosts',a['address_count'],'addresses',m['generated_at'])"
+
+  # A failed build opens one issue (or adds to the open one) so it is never silent; the next
+  # success closes it. Phones keep the last published bundle in between, so a failure is a
+  # staleness problem, not an outage, but it must be seen the same day.
+  alert:
+    needs: build
+    if: ${{ failure() }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -e
+          open=$(gh issue list -R "$GITHUB_REPOSITORY" --label build-failure --state open --json number --jq '.[0].number')
+          if [ -n "$open" ]; then
+            gh issue comment "$open" -R "$GITHUB_REPOSITORY" --body "Failed again ($GITHUB_EVENT_NAME). Run: $RUN_URL"
+          else
+            gh issue create -R "$GITHUB_REPOSITORY" --title "List build failed" --label build-failure --body "The list build failed ($GITHUB_EVENT_NAME). Phones keep the last published bundle until a build succeeds; this issue closes itself on the next success. Run: $RUN_URL"
+          fi
+
+  recover:
+    needs: build
+    if: ${{ success() }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -e
+          for n in $(gh issue list -R "$GITHUB_REPOSITORY" --label build-failure --state open --json number --jq '.[].number'); do
+            gh issue close "$n" -R "$GITHUB_REPOSITORY" --comment "A build succeeded again. Run: $RUN_URL"
+          done
