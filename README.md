@@ -132,3 +132,7 @@ The bundle is a collection; each asset keeps its source's terms.
 - `aviation.txt.gz` is built from Wikidata's IATA airport and airline codes and labels (https://www.wikidata.org/), CC0.
 - `postal.txt.gz` is derived from the GeoNames postal code files (https://www.geonames.org/), Creative Commons Attribution 4.0.
 - `aic.txt.gz` is derived from the Italian Medicines Agency's list of authorised medicines (https://www.aifa.gov.it/), CC BY 4.0.
+
+## Support the work
+
+Verdetto, the scanner this list is built for, is free with no ads and paid for by the people who use it: https://verdettoqr.com/support-the-work
