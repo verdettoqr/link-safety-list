@@ -20,7 +20,7 @@ Blocklists, hashed:
 | Source | What it contributes | Terms |
 |---|---|---|
 | [PhishTank](https://www.phishtank.com/) | Phishing URLs, community-submitted, verified, online | [Developer terms](https://www.phishtank.com/developer_info.php); an application key raises the download limit |
-| [CERT Polska warning list](https://cert.pl/en/warning-list/) | Dangerous domains verified by a national CERT; an entry covers its subdomains; entries expire after six months | Public list; no license text published, ask CERT.PL before redistributing |
+| [CERT Polska warning list](https://cert.pl/en/warning-list/) | Dangerous domains verified by a national CERT; an entry covers its subdomains; entries expire after six months | CC0 1.0 on the open-data copy (dane.gov.pl dataset 2740, publisher NASK-PIB); the live file states no terms |
 | [PhishDestroy destroylist](https://github.com/phishdestroy/destroylist) | Phishing and scam domains, crypto-heavy, community and own detection | MIT |
 | [PhishIndex blocklist](https://github.com/PhishIndex/phishindex-blocklist) | Malicious domains from PhishIndex's own detection (their aggregate list is not used) | MIT |
 | [polkadot-js phishing](https://github.com/polkadot-js/phishing) | Crypto scam domains (deny list) and scam wallet addresses (Substrate SS58) | Apache-2.0 |
