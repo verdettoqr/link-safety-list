@@ -1,0 +1,30 @@
+name: Sweep the open cases
+
+# Once a day: a case still undecided after seven days closes without listing; an undecided case older than a day
+# is re-fetched once, so a page that was down or slow gets a second look. Precision first: nothing lists here.
+
+on:
+  schedule:
+    - cron: "41 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  actions: write
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Sweep
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tools/sweep.py

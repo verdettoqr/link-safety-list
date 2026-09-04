@@ -1,12 +1,21 @@
 name: Apply a case label
 
-# The person's decision is a label on the case issue. list:url, list:host, and list:address add the proposed entry
-# to the own files with the evidence line; unlist adds it to own/allow.txt; not-a-phish and already close the case.
-# A push made with the workflow token starts no other workflow, so the build is dispatched by hand at the end.
+# A decision is a label on the case issue: list:url, list:host, and list:address add the proposed entry to the own
+# files with the evidence line; unlist adds it to own/allow.txt; not-a-phish and already close the case. The
+# decision comes from tools/decide.py in the case workflow (dispatched here, because a label added with the
+# workflow token raises no event) or from a person adding the label by hand.
 
 on:
   issues:
     types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: "Case issue number"
+        required: true
+      label:
+        description: "list:url, list:host, list:address, unlist, not-a-phish, or already"
+        required: true
 
 permissions:
   contents: write
@@ -19,9 +28,12 @@ concurrency:
 
 jobs:
   apply:
-    if: contains(fromJSON('["list:url", "list:host", "list:address", "unlist", "not-a-phish", "already"]'), github.event.label.name)
+    if: github.event_name == 'workflow_dispatch' || contains(fromJSON('["list:url", "list:host", "list:address", "unlist", "not-a-phish", "already"]'), github.event.label.name)
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      LABEL: ${{ inputs.label || github.event.label.name }}
+      NUMBER: ${{ inputs.issue || github.event.issue.number }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -32,8 +44,6 @@ jobs:
       - name: Apply the label to the own files
         env:
           GH_TOKEN: ${{ github.token }}
-          LABEL: ${{ github.event.label.name }}
-          NUMBER: ${{ github.event.issue.number }}
         run: python tools/apply_label.py --label "$LABEL" --issue "$NUMBER"
 
       - name: Test the own files
@@ -42,8 +52,6 @@ jobs:
       - name: Commit, push, and build
         env:
           GH_TOKEN: ${{ github.token }}
-          LABEL: ${{ github.event.label.name }}
-          NUMBER: ${{ github.event.issue.number }}
         run: |
           set -e
           if git diff --quiet -- own; then echo "nothing to commit"; exit 0; fi

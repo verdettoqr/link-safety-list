@@ -314,3 +314,52 @@ def test_own_line_without_a_date_or_case_fails():
         build_list.read_dated_lines("https://x.example/  # 2026-09-01\n", date(2026, 9, 4), 90, "t")
     live, expired = build_list.read_dated_lines("# comment only\n\nhttps://x.example/  # 2026-09-01 case-1 fine\n", date(2026, 9, 4), 90, "t")
     assert live == ["https://x.example/"] and expired == []
+
+
+def _decide():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("decide", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools", "decide.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.decide
+
+
+def _case(kind="s", cls="url", status=200, inds=(), already=()):
+    return {"kind": kind, "class": cls, "fetch": {"status": status}, "already": list(already),
+            "indicators": [{"name": n, "value": v, "line": n, "flag": True} for n, v in inds]}
+
+
+def test_decide_lists_a_url_only_with_page_evidence_and_an_indicator():
+    decide = _decide()
+    assert decide(_case(inds=[("password_field", 1), ("brand_in_wrong_place", "paypal in the path on x.example")]))[0] == "list:url"
+    assert decide(_case(inds=[("password_field", 1)]))[0] == "needs-another-look"          # no domain or brand indicator
+    assert decide(_case(inds=[("brand_in_wrong_place", "x"), ("domain_age_days", 3)]))[0] == "needs-another-look"   # no page evidence
+    assert decide(_case(status=None, inds=[("password_field", 1), ("domain_age_days", 3)]))[0] == "needs-another-look"  # page not reached
+    assert decide(_case(kind="r", inds=[("password_field", 1), ("domain_age_days", 3)]))[0] == "needs-another-look"   # a misread is not a listing
+
+
+def test_decide_host_listing_needs_a_fresh_whole_domain_scam():
+    decide = _decide()
+    fresh_brand = [("password_field", 1), ("brand_in_wrong_place", "paypal in the registrable domain (paypal-secure.example, not paypal.com)"), ("domain_age_days", 5)]
+    assert decide(_case(inds=fresh_brand))[0] == "list:host"
+    assert decide(_case(inds=fresh_brand + [("shared_hosting", "pages.dev")]))[0] == "list:url"     # shared host: exact URL only
+    assert decide(_case(inds=fresh_brand + [("popular_host", "example.com")]))[0] == "list:url"     # popular site: never the host
+    old_brand = [("password_field", 1), ("brand_in_wrong_place", "paypal in the registrable domain"), ("domain_age_days", 400)]
+    assert decide(_case(inds=old_brand))[0] == "list:url"
+
+
+def test_decide_popular_site_needs_a_brand_indicator_not_just_age():
+    decide = _decide()
+    assert decide(_case(inds=[("password_field", 1), ("domain_age_days", 3), ("popular_host", "big.example")]))[0] == "needs-another-look"
+    assert decide(_case(inds=[("password_field", 1), ("digit_lookalike", "paypal"), ("popular_host", "big.example")]))[0] == "list:url"
+
+
+def test_decide_unlist_already_and_addresses():
+    decide = _decide()
+    assert decide(_case(already=["bundle: exact URL"]))[0] == "already"
+    assert decide(_case(kind="m", inds=[("domain_age_days", 900), ("title", "Shop")]))[0] == "unlist"
+    assert decide(_case(kind="m", inds=[("domain_age_days", 900), ("password_field", 1)]))[0] == "needs-another-look"
+    assert decide(_case(kind="m", inds=[("domain_age_days", 20)]))[0] == "needs-another-look"
+    assert decide(_case(cls="address", status=None), three_reports=True)[0] == "list:address"
+    assert decide(_case(cls="address", status=None))[0] == "needs-another-look"

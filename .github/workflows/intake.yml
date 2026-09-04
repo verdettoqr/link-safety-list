@@ -1,0 +1,35 @@
+name: Intake new reports
+
+# Every hour: read the report form's published CSV tab (no credentials; the address is a secret) and open a case
+# for every row that has none yet. The form is the only human input in the whole pipeline.
+
+on:
+  schedule:
+    - cron: "9 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: read
+  actions: write
+
+concurrency:
+  group: intake
+  cancel-in-progress: false
+
+jobs:
+  intake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Dispatch a case for every new row
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORM_FEED_URL: ${{ secrets.FORM_FEED_URL }}
+        run: python tools/intake.py

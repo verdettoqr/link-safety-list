@@ -62,6 +62,7 @@ jobs:
           python -c "import json; c = json.load(open('case/evidence.json')); print('case', c.get('key'), c.get('class'), c.get('flag_count'), 'flagged; already:', c.get('already'))"
 
       - name: Open or update the case issue
+        id: issue
         env:
           GH_TOKEN: ${{ github.token }}
           KEY: ${{ steps.build.outputs.key }}
@@ -69,15 +70,32 @@ jobs:
           set -e
           title=$(python -c "import json; c = json.load(open('case/evidence.json')); print(('case-' + c['key'] + ': ' + (c.get('host') or c.get('canonical') or c.get('content') or 'report'))[:100])")
           n=$(gh issue list --label case --state open --search "case-$KEY in:title" --json number --jq '.[0].number // empty')
+          three=false
           if [ -z "$n" ]; then
-            gh issue create --label case --title "$title" --body-file case/case.md
+            url=$(gh issue create --label case --title "$title" --body-file case/case.md)
+            n=${url##*/}
           else
             gh issue comment "$n" --body-file case/case.md
             reports=$(gh issue view "$n" --json comments --jq '[.comments[] | select(.body | startswith("## Case"))] | length')
             reports=$((reports + 1))
             echo "case $n now has $reports reports"
-            if [ "$reports" -ge 3 ]; then gh issue edit "$n" --add-label three-reports; fi
+            if [ "$reports" -ge 3 ]; then gh issue edit "$n" --add-label three-reports; three=true; fi
           fi
+          echo "number=$n" >> "$GITHUB_OUTPUT"
+          echo "three=$three" >> "$GITHUB_OUTPUT"
+
+      # The decision is made by fixed rules (tools/decide.py); a listing needs page evidence plus a domain or
+      # brand indicator, never a score. The label workflow is dispatched by hand because a label added with the
+      # workflow token starts no workflow on its own.
+      - name: Decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ steps.issue.outputs.number }}
+          THREE: ${{ steps.issue.outputs.three }}
+        run: |
+          set -e
+          flag=""; if [ "$THREE" = "true" ]; then flag="--three-reports"; fi
+          python tools/decide.py --evidence case/evidence.json --issue "$NUMBER" --apply $flag
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
