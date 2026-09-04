@@ -51,5 +51,6 @@ jobs:
           if ! gh release view current >/dev/null 2>&1; then
             gh release create current --title "Current bundle" --notes "Rolling release. The assets are replaced on every build; see list.json for the build time and source counts." --latest=false
           fi
-          gh release upload current dist/list.bin dist/list.json dist/list.sig dist/psl.txt.gz dist/shorteners.txt.gz dist/confusables.txt.gz dist/brands.txt.gz --clobber
+          # every built file, so a new reference asset can never be listed in the manifest and left unuploaded
+          gh release upload current dist/* --clobber
           python -c "import json;m=json.load(open('dist/list.json'));a=m['assets']['list.bin'];print('published',a['url_count'],'urls',a['host_count'],'hosts',a['address_count'],'addresses',m['generated_at'])"
