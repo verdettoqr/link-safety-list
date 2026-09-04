@@ -262,6 +262,9 @@ def indicators_for(canonical: str, host: str, registrable: str, assets: dict, to
         found.append({"name": "shortener", "value": host, "line": f"Shortener host ({host}): the destination is what matters", "flag": True})
     if parsed.scheme == "http":
         found.append({"name": "plain_http", "value": True, "line": "Plain http, no encryption", "flag": True})
+    popular = set(assets.get("brands", []))
+    if registrable and registrable in popular:
+        found.append({"name": "popular_host", "value": registrable, "line": f"Popular site ({registrable}): only an exact URL with strong page evidence is ever listed, never the host", "flag": False})
     if len(labels) - len(registrable.split(".")) >= 3:
         found.append({"name": "deep_subdomains", "value": len(labels), "line": f"{len(labels)} labels in the host", "flag": False})
     if rdap.get("abuse_email"):
@@ -394,7 +397,7 @@ def main() -> int:
     with open(os.path.join(args.out, "evidence.json"), "w", encoding="utf-8") as f:
         json.dump(case, f, indent=2, ensure_ascii=False)
 
-    lines = [f"## Case {key}", "", f"Kind: {case['kind_text']}. Class: {cls}. Reported {p['reported_at'] or 'now'}"
+    lines = [f"## Case {key}", "", f"Report id: report-{p['report_id'] or 'manual'}. Kind: {case['kind_text']}. Class: {cls}. Reported {p['reported_at'] or 'now'}"
              + (f", from the app ({p['versions']})" if p["versions"] else "") + (f". Found: {p['found']}" if p["found"] else "") + ".", "",
              f"Canonical: `{canonical}`" + (f"  (host `{host}`, registrable `{registrable}`)" if host else ""), ""]
     if p["warnings"]:
