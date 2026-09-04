@@ -170,6 +170,8 @@ def test_postal_parser():
     rows = build_list.parse_postal_txt("US", txt)
     assert rows == {("US", "22307"): "Alexandria\tVirginia\t38.772\t-77.058"}
     assert build_list.parse_postal_txt("GB", txt) == {("GB", "SW1A"): "Westminster\tEngland\t51.500\t-0.140"}
+    jp = "JP" + chr(9) + "100-0001" + chr(9) + "Chiyoda" + chr(9) + "Tokyo" + chr(9) + "13" + chr(9) * 5 + "35.69" + chr(9) + "139.76" + chr(9) + "6" + chr(10)
+    assert build_list.parse_postal_txt("JP", jp) == {("JP", "1000001"): "Chiyoda" + chr(9) + "Tokyo" + chr(9) + "35.690" + chr(9) + "139.760"}
 
 
 def test_aic_builder():
