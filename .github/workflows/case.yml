@@ -75,6 +75,11 @@ jobs:
             url=$(gh issue create --label case --title "$title" --body-file case/case.md)
             n=${url##*/}
           else
+            rid=$(python -c "import json; c = json.load(open('case/evidence.json')); print('report-' + (c.get('report', {}).get('report_id') or 'manual'))")
+            if [ "$rid" != "report-manual" ] && gh issue view "$n" --json body,comments --jq '[.body] + [.comments[].body] | join("\n")' | grep -q "Report id: $rid\."; then
+              echo "report $rid already recorded on case $n; not counted again"
+              echo "number=$n" >> "$GITHUB_OUTPUT"; echo "three=false" >> "$GITHUB_OUTPUT"; echo "repeat=true" >> "$GITHUB_OUTPUT"; exit 0
+            fi
             gh issue comment "$n" --body-file case/case.md
             reports=$(gh issue view "$n" --json comments --jq '[.comments[] | select(.body | startswith("## Case"))] | length')
             reports=$((reports + 1))
@@ -88,6 +93,7 @@ jobs:
       # brand indicator, never a score. The label workflow is dispatched by hand because a label added with the
       # workflow token starts no workflow on its own.
       - name: Decide
+        if: steps.issue.outputs.repeat != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           NUMBER: ${{ steps.issue.outputs.number }}
