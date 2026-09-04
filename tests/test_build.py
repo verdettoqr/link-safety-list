@@ -122,3 +122,12 @@ def test_polkadot_readers():
     assert doms == ["polkadot-wallet.example", "Dot-Airdrop.example"]
     addrs = build_list.read_polkadot_addresses(b'{"scam.example": ["1abc", "5xyz"], "other.example": ["5qrs"]}')
     assert addrs == ["1abc", "5xyz", "5qrs"]
+
+
+def test_ofac_reader():
+    xml = (b'<?xml version="1.0"?><sdnList xmlns="http://tempuri.org/sdnList.xsd"><sdnEntry><uid>1</uid>'
+           b'<idList><id><uid>2</uid><idType>Digital Currency Address - XBT</idType><idNumber>1abcDEF</idNumber></id>'
+           b'<id><uid>3</uid><idType>Passport</idType><idNumber>X123</idNumber></id>'
+           b'<id><uid>4</uid><idType>Digital Currency Address - ETH</idType><idNumber>0xAbC0000000000000000000000000000000000001</idNumber></id>'
+           b'</idList></sdnEntry></sdnList>')
+    assert build_list.read_ofac_addresses(xml) == ["1abcDEF", "0xAbC0000000000000000000000000000000000001"]

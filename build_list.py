@@ -7,6 +7,7 @@ Blocklist sources, each switchable with --skip:
   phishdestroy PhishDestroy destroylist, phishing and scam domains (MIT).
   phishindex   PhishIndex own malicious domains (MIT).
   polkadot     polkadot-js phishing deny list (hosts) and scam addresses (Apache-2.0).
+  ofac         OFAC SDN list, sanctioned digital-currency addresses (US government work, public domain).
 
 Reference data, always built:
   psl          Mozilla's Public Suffix List (MPL 2.0), so the phone computes registrable domains correctly.
@@ -54,6 +55,7 @@ BLOCKLISTS = {
     "phishdestroy": "https://raw.githubusercontent.com/phishdestroy/destroylist/main/list.txt",
     "phishindex": "https://raw.githubusercontent.com/PhishIndex/phishindex-blocklist/main/Data/Malicious%20Domains/txt/phishindex_domains.txt",
     "polkadot": "https://polkadot.js.org/phishing/all.json",
+    "ofac": "https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.XML",
 }
 POLKADOT_ADDRESSES = "https://polkadot.js.org/phishing/address.json"
 REFERENCE = {
@@ -318,6 +320,31 @@ def read_polkadot_addresses(data: bytes) -> list[str]:
     return [str(a) for addrs in doc.values() if isinstance(addrs, list) for a in addrs]
 
 
+def read_ofac_addresses(data: bytes) -> list[str]:
+    """OFAC's legacy SDN.XML (a US government work, public domain): every <id> whose <idType> starts with
+    'Digital Currency Address - ' carries one sanctioned wallet address in <idNumber>. Streamed, namespace-agnostic,
+    so the 30 MB file never sits in memory as a tree. The Sanctions List Service answers only requests that carry
+    a User-Agent and redirects to a signed, short-lived download link, which urllib follows."""
+    import xml.etree.ElementTree as ET
+    out: list[str] = []
+    for _event, el in ET.iterparse(io.BytesIO(data), events=("end",)):
+        tag = el.tag.rsplit("}", 1)[-1]
+        if tag != "id":
+            continue
+        id_type = ""
+        number = ""
+        for child in el:
+            ctag = child.tag.rsplit("}", 1)[-1]
+            if ctag == "idType":
+                id_type = (child.text or "").strip()
+            elif ctag == "idNumber":
+                number = (child.text or "").strip()
+        if id_type.startswith("Digital Currency Address - ") and number:
+            out.append(number)
+        el.clear()
+    return out
+
+
 def read_json_list(data: bytes) -> list[str]:
     return [str(r) for r in json.loads(data.decode("utf-8")) if isinstance(r, str)]
 
@@ -369,6 +396,8 @@ def collect(skip: set[str]) -> tuple[set[bytes], set[bytes], set[bytes], dict]:
         elif name == "polkadot":
             run(name, url, UA, read_polkadot_domains, add_host)
             run("polkadot_addresses", POLKADOT_ADDRESSES, UA, read_polkadot_addresses, add_address)
+        elif name == "ofac":
+            run("ofac_addresses", url, UA, read_ofac_addresses, add_address)
         else:
             run(name, url, UA, read_lines, add_url)
     return urls, hosts, addresses, report
