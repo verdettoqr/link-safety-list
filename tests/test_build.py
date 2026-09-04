@@ -153,3 +153,10 @@ def test_aviation_builder():
     out = build_list.build_aviation(_json.dumps(doc).encode("utf-8"))
     assert "A\tYUL\tMontreal-Trudeau International Airport\n" in out
     assert "L\tAC\tAir Canada\n" in out and "Jetz" not in out and "duplicate" not in out
+    # equal sitelinks: the shorter name wins
+    doc["results"]["bindings"] += [
+        {"kind": {"value": "L"}, "code": {"value": "ZQ"}, "name": {"value": "Zed Air Regional"}, "links": {"value": "4"}},
+        {"kind": {"value": "L"}, "code": {"value": "ZQ"}, "name": {"value": "Zed Air"}, "links": {"value": "4"}},
+    ]
+    out = build_list.build_aviation(_json.dumps(doc).encode("utf-8"))
+    assert "L\tZQ\tZed Air\n" in out and "Regional" not in out
