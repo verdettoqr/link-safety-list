@@ -7,6 +7,7 @@ One release, tagged `current`, replaced on every build. It holds:
 | `list.bin` | Sorted SHA-256 prefixes for listed URLs, hosts, and wallet addresses (`LSL2`) | 3 to 4 MB |
 | `psl.txt.gz` | The Public Suffix List rules, one per line (MPL 2.0) | 70 KB |
 | `shorteners.txt.gz` | URL shortener hosts, one per line | 6 KB |
+| `affiliates.txt.gz` | Affiliate and click-tracking redirect hosts, one per line (optional; the phone downloads it when the manifest carries it) | 1 KB |
 | `confusables.txt.gz` | Unicode confusables whose target is ASCII, `HEX<TAB>target` per line | 30 KB |
 | `brands.txt.gz` | The top 10,000 domains, one per line, most popular first | 60 KB |
 | `list.json` | The manifest: every asset's SHA-256 and size, source outcomes, the signature | 2 KB |
@@ -69,6 +70,11 @@ Address: trimmed; 0x EVM addresses lowercased.
    a known site. A brand within edit distance one of the registrable
    domain is a weaker signal, shown as a note only.
 6. Popular site: the registrable domain is in `brands.txt`.
+7. Affiliate link: the host, or a parent, equals a line of `affiliates.txt`.
+   The phone treats it like a shortener (follows the redirect when online
+   lookups are on and shows the destination, with its tracking and affiliate
+   tags removed before it opens) and adds the note "Affiliate link". Never a
+   warning.
 
 ## Manifest and signature (`list.json`, `list.sig`)
 

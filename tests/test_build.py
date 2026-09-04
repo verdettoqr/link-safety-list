@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import build_list
 from build_list import (  # noqa: E402
-    ADDRESS_PREFIX, HOST_PREFIX, MAGIC, URL_PREFIX, build_confusables, build_shorteners, canonical, env,
+    ADDRESS_PREFIX, HOST_PREFIX, MAGIC, URL_PREFIX, build_affiliates, build_confusables, build_shorteners, canonical, env,
     normalize, normalize_address, normalize_host, prefix, write_bin,
 )
 
@@ -363,3 +363,36 @@ def test_decide_unlist_already_and_addresses():
     assert decide(_case(kind="m", inds=[("domain_age_days", 20)]))[0] == "needs-another-look"
     assert decide(_case(cls="address", status=None), three_reports=True)[0] == "list:address"
     assert decide(_case(cls="address", status=None))[0] == "needs-another-look"
+
+
+def test_affiliates_builder():
+    filler = "".join(f"x{i}.example  # filler{chr(10)}" for i in range(20)).encode("utf-8")
+    sample = b"# header\nAnrdoezrs.net  # CJ\nsjv.io  # Impact\nanrdoezrs.net\n" + filler
+    out = build_affiliates(sample)
+    assert out.startswith("anrdoezrs.net\nsjv.io\nx0.example\n") and out.endswith("x9.example\n") and out.count("\n") == 22
+    import pytest
+    with pytest.raises(ValueError):
+        build_affiliates(b"amazon.com  # a merchant, never\n" + filler)
+    with pytest.raises(ValueError):
+        build_affiliates(b"nodot  # not a host\n" + filler)
+    with pytest.raises(ValueError):
+        build_affiliates(b"only.example\n")
+
+
+def test_curated_affiliates_file_is_well_formed():
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "curated", "affiliates.txt")
+    with open(path, "rb") as f:
+        raw = f.read()
+    out = build_affiliates(raw)
+    hosts = out.split()
+    assert len(hosts) >= 40
+    # every entry names its network after the hash sign
+    for line in raw.decode("utf-8").splitlines():
+        body = line.split("#", 1)[0].strip()
+        if body:
+            assert "#" in line and line.split("#", 1)[1].strip(), line
+    # a general shortener is not an affiliate host; the shorteners list owns those
+    assert "bit.ly" not in hosts and "t.co" not in hosts and "amzn.to" not in hosts
+    # a tracking subdomain of a merchant is listed as the subdomain, never the merchant
+    assert "rover.ebay.com" in hosts and "ebay.com" not in hosts
+

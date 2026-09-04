@@ -33,6 +33,7 @@ Reference data, plain text:
 |---|---|---|
 | [Public Suffix List](https://publicsuffix.org/) | Registrable domains, so `bank.com.au` and every country suffix are computed right | MPL 2.0 |
 | [url-shorteners](https://github.com/PeterDaveHello/url-shorteners) | The "shortened link" warning, hundreds of hosts instead of a dozen | CC BY-SA 4.0; `shorteners.txt.gz` is redistributed under the same licence with attribution |
+| Curated affiliate redirect hosts ([`curated/affiliates.txt`](curated/affiliates.txt)) | The "Affiliate link" note, and following such links to their destination like shortened ones | Verdetto's own list, reviewed by a person; CC BY-SA 4.0 |
 | [Unicode confusables](https://www.unicode.org/Public/security/latest/) | Lookalike names: characters that imitate ASCII letters | Unicode license |
 | [Majestic Million](https://majestic.com/reports/majestic-million) top 10,000 | "Popular site" notes and the targets of lookalike detection | CC BY 3.0 (replaced Tranco on 2026-09-03: its default list mixes CC BY-NC and CC BY-SA inputs) |
 | [Wikidata](https://www.wikidata.org/) IATA codes | Airport (P238) and airline (P229) names, shown on boarding passes in place of codes; a code held by several items goes to the best-known one (sitelinks, then the shorter name) | CC0 |
@@ -145,6 +146,7 @@ The bundle is a collection; each asset keeps its source's terms.
 - The OFAC Specially Designated Nationals list, U.S. Department of the Treasury, Office of Foreign Assets Control: a work of the United States Government, not subject to copyright in the United States (17 U.S.C. 105); fetched from the Sanctions List Service. The Treasury seal and OFAC's name are not used as endorsement.
 - `psl.txt.gz` is derived from the Public Suffix List (https://publicsuffix.org/), Mozilla Public License 2.0; the source is pulled from publicsuffix.org once a day.
 - `shorteners.txt.gz` is derived from url-shorteners by Peter Dave Hello (https://github.com/PeterDaveHello/url-shorteners), CC BY-SA 4.0, and is itself CC BY-SA 4.0.
+- `affiliates.txt.gz` is Verdetto's own curated list of affiliate and click-tracking redirect hosts (curated/affiliates.txt), CC BY-SA 4.0; the hostnames were cross-checked against the redirect providers named in the ClearURLs rules (LGPL-3.0) as facts, and nothing from that data is copied.
 - `confusables.txt.gz` is derived from the Unicode confusables data. Copyright (c) 1991-2025 Unicode, Inc. Licensed under the Unicode License v3 (https://www.unicode.org/license.txt).
 - `brands.txt.gz` is derived from the Majestic Million (https://majestic.com/reports/majestic-million), CC BY 3.0.
 - `aviation.txt.gz` is built from Wikidata's IATA airport and airline codes and labels (https://www.wikidata.org/), CC0.

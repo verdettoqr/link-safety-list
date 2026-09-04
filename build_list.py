@@ -16,7 +16,7 @@ Reference data, always built:
   brands       The top 10,000 domains from the Majestic Million (CC BY 3.0), for "popular site" notes and lookalike targets.
 
 Output (in --out): list.bin (LSL2: sorted SHA-256 prefixes for URLs, hosts, addresses), psl.txt.gz,
-shorteners.txt.gz, confusables.txt.gz, brands.txt.gz, list.json (the manifest: every asset's SHA-256
+shorteners.txt.gz, affiliates.txt.gz, confusables.txt.gz, brands.txt.gz, list.json (the manifest: every asset's SHA-256
 and size, the source outcomes, the Ed25519 signature over the manifest when LIST_SIGNING_KEY is set),
 and list.sig (the same signature).
 
@@ -54,6 +54,9 @@ UA = "link-safety-list/2.0 (+https://github.com/verdettoqr/link-safety-list)"
 BRANDS_TOP = 10_000
 OWN_DIR = "own"             # our own entries, each verified by a person: urls.txt, hosts.txt, addresses.txt, allow.txt
 OWN_MAX_AGE_DAYS = 90       # an own entry expires unless its date is renewed; fresh scam domains die young
+CURATED_DIR = "curated"     # our own reference lists, reviewed by a person, no expiry: affiliates.txt
+# A merchant's own domain is never an affiliate redirect host; the builder refuses these outright.
+NEVER_AFFILIATE_HOSTS = {"amazon.com", "ebay.com", "aliexpress.com", "walmart.com", "etsy.com", "target.com", "bestbuy.com", "temu.com", "shopify.com", "google.com", "youtube.com", "facebook.com", "instagram.com"}
 ALLOW_MAX_AGE_DAYS = 180    # an allow entry (a listing suppressed after review) expires unless renewed
 
 BLOCKLISTS = {
@@ -542,6 +545,26 @@ def build_psl(data: bytes) -> str:
     return "\n".join(rules) + "\n"
 
 
+def build_affiliates(data: bytes) -> str:
+    """curated/affiliates.txt: affiliate and click-tracking redirect hosts, one per line with a comment naming the
+    network; lowercased, deduplicated, sorted. A host must carry a dot and may never be a merchant's own domain
+    (NEVER_AFFILIATE_HOSTS); the phone matches the host or a parent, like shorteners, and only ever notes it."""
+    hosts: set[str] = set()
+    for raw in data.decode("utf-8").splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if not line:
+            continue
+        host = normalize_host(line)
+        if not host or "." not in host:
+            raise ValueError(f"affiliates: not a host: {raw.strip()!r}")
+        if host in NEVER_AFFILIATE_HOSTS:
+            raise ValueError(f"affiliates: a merchant domain is never an affiliate host: {host}")
+        hosts.add(host)
+    if len(hosts) < 20:
+        raise ValueError(f"affiliates: only {len(hosts)} hosts, the curated file answered short")
+    return "\n".join(sorted(hosts)) + "\n"
+
+
 def build_shorteners(data: bytes) -> str:
     return "\n".join(sorted({h for h in (normalize_host(l) for l in read_lines(data)) if h})) + "\n"
 
@@ -729,6 +752,15 @@ def build_reference(report: dict) -> dict[str, bytes]:
             report[name] = {"fetched": True, "count": text.count("\n"), "seconds": int(round(time.time() - t0))}
         except (urllib.error.URLError, urllib.error.HTTPError, ValueError, TimeoutError, OSError, zipfile.BadZipFile, KeyError) as e:
             report[name] = {"fetched": False, "count": 0, "error": f"{type(e).__name__}: {str(e)[:160]}"}
+    # our own curated reference lists, read from the repository, no network: affiliates.txt
+    curated = os.path.join(os.path.dirname(os.path.abspath(__file__)), CURATED_DIR, "affiliates.txt")
+    try:
+        with open(curated, "rb") as f:
+            text = build_affiliates(f.read())
+        out["affiliates"] = text.encode("utf-8")
+        report["affiliates"] = {"fetched": True, "count": text.count("\n"), "seconds": 0, "curated": True}
+    except (OSError, ValueError, UnicodeDecodeError) as e:
+        report["affiliates"] = {"fetched": False, "count": 0, "error": f"{type(e).__name__}: {str(e)[:160]}"}
     return out
 
 
