@@ -1,0 +1,86 @@
+name: Build a case from a report
+
+# A report (from the form's script as a repository_dispatch, or typed in by hand) becomes a case issue with the
+# evidence gathered: canonical form, what the bundle already lists, the indicators, a fetch from this runner.
+# Nothing here lists anything; a label on the issue does that (label.yml).
+
+on:
+  repository_dispatch:
+    types: [report]
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: "s scam-looking, r misread, d wrong details, o other, m listed by mistake"
+        default: "s"
+      content:
+        description: "The scanned text: a URL, a host, or an address"
+        required: true
+      found:
+        description: "Where the code was found"
+        default: ""
+      warnings:
+        description: "Warnings the app showed"
+        default: ""
+      versions:
+        description: "App, list, and phone"
+        default: ""
+      report_id:
+        description: "Report id"
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  case:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      # The report's fields reach the script through the environment and a file, never through the shell
+      - name: Payload
+        env:
+          PAYLOAD: ${{ toJSON(github.event.client_payload) }}
+          INPUTS: ${{ toJSON(inputs) }}
+        run: python -c "import json, os; p = json.loads(os.environ.get('PAYLOAD') or 'null') or json.loads(os.environ.get('INPUTS') or '{}'); json.dump(p, open('payload.json', 'w'))"
+
+      - name: Build the case
+        id: build
+        run: |
+          set -e
+          key=$(python tools/case.py --payload payload.json --out case)
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          python -c "import json; c = json.load(open('case/evidence.json')); print('case', c.get('key'), c.get('class'), c.get('flag_count'), 'flagged; already:', c.get('already'))"
+
+      - name: Open or update the case issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEY: ${{ steps.build.outputs.key }}
+        run: |
+          set -e
+          title=$(python -c "import json; c = json.load(open('case/evidence.json')); print(('case-' + c['key'] + ': ' + (c.get('host') or c.get('canonical') or c.get('content') or 'report'))[:100])")
+          n=$(gh issue list --label case --state open --search "case-$KEY in:title" --json number --jq '.[0].number // empty')
+          if [ -z "$n" ]; then
+            gh issue create --label case --title "$title" --body-file case/case.md
+          else
+            gh issue comment "$n" --body-file case/case.md
+            reports=$(gh issue view "$n" --json comments --jq '[.comments[] | select(.body | startswith("## Case"))] | length')
+            reports=$((reports + 1))
+            echo "case $n now has $reports reports"
+            if [ "$reports" -ge 3 ]; then gh issue edit "$n" --add-label three-reports; fi
+          fi
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: case-${{ steps.build.outputs.key }}-${{ github.run_id }}
+          path: case/
+          retention-days: 90
