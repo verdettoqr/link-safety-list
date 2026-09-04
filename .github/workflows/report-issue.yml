@@ -1,0 +1,35 @@
+name: Intake a report issue
+
+# A connector (Power Automate, Zapier, or any tool that can open a GitHub issue) posts one issue per form response,
+# labelled "report", with key: value lines in the body (see tools/issue_intake.py). Only the repository owner's
+# account may open them; the issue is turned into a case and closed.
+
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  contents: read
+  issues: write
+  actions: write
+
+jobs:
+  intake:
+    if: github.event.issue.user.login == 'verdettoqr' && contains(github.event.issue.labels.*.name, 'report')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: report-issue-${{ github.event.issue.number }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Dispatch the case and close the report issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.issue.number }}
+        run: python tools/issue_intake.py --issue "$NUMBER"
