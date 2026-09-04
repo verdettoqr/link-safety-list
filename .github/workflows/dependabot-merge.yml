@@ -2,8 +2,10 @@ name: Merge Dependabot action updates
 
 # Keeps the commit-pinned actions in build.yml current without a person in the loop:
 # Dependabot opens the pull request, this job runs the test suite on it, and if the
-# update is a minor or patch release of a GitHub-owned action it merges. Major
-# versions and anything not under actions/ stay open for a human. Workflows that
+# update is a GitHub-owned action (actions/ or dependabot/) it merges, major versions
+# included (operator, 2026-09-04: merges are automatic). A failed build after a merge
+# opens a build-failure issue from build.yml, so a bad major surfaces the same day.
+# Anything from another publisher stays open for a human. Workflows that
 # Dependabot triggers get a read-only token unless permissions are declared, hence
 # the explicit block; the list-signing secret is not exposed to this workflow.
 
@@ -39,7 +41,7 @@ jobs:
         id: meta
         uses: dependabot/fetch-metadata@21025c705c08248db411dc16f3619e6b5f9ea21a # v2.5.0
 
-      # One decision, computed once: a minor or patch release of a GitHub-owned action merges itself.
+      # One decision, computed once: any release of a GitHub-owned action merges itself once the tests pass.
       - name: Decide
         id: decide
         env:
@@ -48,8 +50,8 @@ jobs:
           KIND: ${{ steps.meta.outputs.update-type }}
         run: |
           merge=false
-          case "$KIND" in version-update:semver-minor|version-update:semver-patch) small=true ;; *) small=false ;; esac
-          if [ "$ECOSYSTEM" = "github_actions" ] && [ "$small" = true ] && [ "${NAMES#actions/}" != "$NAMES" ]; then merge=true; fi
+          case "$NAMES" in actions/*|dependabot/*) owned=true ;; *) owned=false ;; esac
+          if [ "$ECOSYSTEM" = "github_actions" ] && [ "$owned" = true ]; then merge=true; fi
           echo "merge=$merge" >> "$GITHUB_OUTPUT"
           echo "ecosystem=$ECOSYSTEM names=$NAMES kind=$KIND merge=$merge"
 
@@ -66,4 +68,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.html_url }}
         run: |
-          gh pr comment "$PR" --body 'Tests pass. Not merged automatically because this is a major version or not a GitHub-owned action, so it waits for a person.'
+          gh pr comment "$PR" --body 'Tests pass. Not merged automatically because the action is not published by GitHub, so it waits for a person.'
