@@ -141,5 +141,15 @@ def test_aviation_builder():
         {"kind": {"value": "L"}, "code": {"value": "AC"}, "name": {"value": "duplicate"}},
     ]}}
     import json as _json
+    import pytest
+    with pytest.raises(ValueError):
+        build_list.build_aviation(_json.dumps(doc).encode("utf-8"))
+    filler = [{"kind": {"value": "A"}, "code": {"value": c}, "name": {"value": "x"}}
+              for c in ("".join(t) for t in __import__("itertools").product("BCDEFGHIJK", repeat=3))]
+    doc["results"]["bindings"] = [
+        {"kind": {"value": "L"}, "code": {"value": "AC"}, "name": {"value": "Air Canada Jetz"}, "links": {"value": "3"}},
+        {"kind": {"value": "L"}, "code": {"value": "AC"}, "name": {"value": "Air Canada"}, "links": {"value": "90"}},
+    ] + doc["results"]["bindings"] + filler
     out = build_list.build_aviation(_json.dumps(doc).encode("utf-8"))
-    assert out == "A\tYUL\tMontreal-Trudeau International Airport\nL\tAC\tAir Canada\n"
+    assert "A\tYUL\tMontreal-Trudeau International Airport\n" in out
+    assert "L\tAC\tAir Canada\n" in out and "Jetz" not in out and "duplicate" not in out
