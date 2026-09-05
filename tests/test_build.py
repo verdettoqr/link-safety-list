@@ -422,3 +422,67 @@ def test_rdap_bootstrap_builder():
     bad = {"version": "1.0", "services": [[["kg"], ["ftp://rdap.cctld.kg/"]]] + filler}
     with pytest.raises(ValueError):
         build_list.build_rdap_bootstrap(_json.dumps(bad).encode("utf-8"))
+
+
+def _bdpm_fixture(n=10050):
+    cis = "\n".join(f"{60000000 + i}\tMEDICAMENT {i} 10 mg, comprim\u00e9\tcomprim\u00e9\torale\tAutorisation active\tProc\u00e9dure nationale\tCommercialis\u00e9e\t01/01/2020\t\t\t HOLDER {i}\tNon" for i in range(n))
+    cip = "\n".join(f"{60000000 + i}\t{1000000 + i}\tbo\u00eete de 30\tPr\u00e9sentation active\tD\u00e9claration de commercialisation\t01/01/2020\t34000{i:08d}\toui\t65%\t1,00\t1,02\t0,02\t" for i in range(n))
+    page = "<html><body>Derni\u00e8re mise \u00e0 jour le 31/08/2026 T\u00e9l\u00e9chargement</body></html>"
+    return cis.encode("latin-1"), cip.encode("utf-8"), page.encode("utf-8")
+
+
+def test_bdpm_builder_joins_cip13_to_name_and_holder_verbatim():
+    import pytest
+    cis, cip, page = _bdpm_fixture()
+    build_list.REFERENCE_META.pop("bdpm", None)
+    out = build_list.build_bdpm(cip, cis, page)
+    lines = out.splitlines()
+    assert len(lines) == 10050 and lines[0] == "3400000000000\tMEDICAMENT 0 10 mg, comprim\u00e9\tHOLDER 0"
+    assert build_list.REFERENCE_META["bdpm"]["updated"] == "2026-08-31" and "2026-08-31" in build_list.REFERENCE_META["bdpm"]["credit"]
+    assert "Licence Ouverte" in build_list.REFERENCE_META["bdpm"]["credit"]
+    # short files and an undated page are refused so the previous bundle stands
+    with pytest.raises(ValueError):
+        build_list.build_bdpm(cip.decode("utf-8").split("\n", 50)[0].encode("utf-8"), cis, page)
+    with pytest.raises(ValueError):
+        build_list.build_bdpm(cip, cis, b"<html>no date here</html>")
+
+
+def _blz_line(blz, name, merkmal="1", deleted="0"):
+    body = f"{blz}{merkmal}{name:<58}{'10591':<5}{'Berlin':<35}{'kurz':<27}{'20100':<5}{'MARKDEF1100':<11}{'09':<2}{'000000':<6}U{deleted}{'00000000':<8}"
+    assert len(body) == 168, len(body)
+    return body
+
+
+def test_banks_de_builder_copies_names_verbatim_and_reads_the_window():
+    import pytest
+    page = ('<a href="/resource/blob/602632/abc/def/blz-aktuell-txt-data.txt">TXT</a> g\u00fcltig vom 08.06.2026 bis 06.09.2026').encode("utf-8")
+    lines = [_blz_line(f"{10000000 + i:08d}", f"Bank {i}") for i in range(2005)]
+    lines.append(_blz_line("99999991", "Sparkasse M\u00fcnchen (Gesch\u00e4ftsfeld)  "))   # umlauts and inner spaces stay
+    lines.append(_blz_line("99999992", "Branch record", merkmal="2"))                      # not a lead record
+    lines.append(_blz_line("99999993", "Gone Bank", deleted="1"))                          # flagged for deletion
+    data = ("\n".join(lines) + "\n").encode("latin-1")
+    build_list.REFERENCE_META.pop("banks-de", None)
+    out = build_list.build_banks_de(page, data)
+    rows = out.splitlines()
+    assert "99999991\tSparkasse M\u00fcnchen (Gesch\u00e4ftsfeld)" in rows and not any(r.startswith("9999999" + d) for r in rows for d in "23")
+    assert len(rows) == 2006 and rows == sorted(rows)
+    assert build_list.REFERENCE_META["banks-de"] == {"valid_from": "2026-06-08", "valid_to": "2026-09-06", "notice": "Quelle: Deutsche Bundesbank"}
+    with pytest.raises(ValueError):
+        build_list.build_banks_de(b"<html>no link</html>", data)
+    with pytest.raises(ValueError):
+        build_list.build_banks_de(page, data.decode("latin-1").split("\n", 100)[0].encode("latin-1"))
+
+
+def test_crosscheck_aviation_reports_differences_without_gating():
+    import pytest
+    header = "id,ident,type,name,latitude_deg,longitude_deg,elevation_ft,continent,iso_country,iso_region,municipality,scheduled_service,icao_code,iata_code,gps_code,local_code,home_link,wikipedia_link,keywords\n"
+    rows = [f"{i},X{i:03d},small_airport,Field {i},0,0,0,NA,US,US-XX,Town,no,,{chr(65 + i // 676)}{chr(65 + (i // 26) % 26)}{chr(65 + i % 26)},,,,," for i in range(1200)]
+    rows += ["1,YUL,large_airport,Montr\u00e9al-Pierre Elliott Trudeau International Airport,0,0,0,NA,CA,CA-QC,Montreal,yes,CYUL,YUL,,,,,",
+             "2,ZZZ,large_airport,Somewhere Else,0,0,0,NA,CA,CA-QC,X,yes,,ZZY,,,,,"]
+    csv_data = (header + "\n".join(rows)).encode("utf-8")
+    ours = "A\tYUL\tMontreal-Trudeau International Airport\nA\tQQQ\tOnly Here Airport\nL\tAC\tAir Canada\n"
+    r = build_list.crosscheck_aviation(ours, csv_data)
+    assert r["compared"] == 1 and r["differ"] == 1 and r["differ_sample"][0]["code"] == "YUL"
+    assert r["ours_not_there"] == 1 and "ZZY" in r["scheduled_not_here"]
+    with pytest.raises(ValueError):
+        build_list.crosscheck_aviation(ours, header.encode("utf-8"))

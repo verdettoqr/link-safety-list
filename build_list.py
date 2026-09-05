@@ -15,9 +15,11 @@ Reference data, always built:
   confusables  Unicode confusables, kept to the mappings whose target is ASCII, for lookalike detection.
   brands       The top 10,000 domains from the Majestic Million (CC BY 3.0), for "popular site" notes and lookalike targets.
   rdap-dns     IANA's RDAP bootstrap file (RFC 9224), so the phone asks a domain's registry for its age directly, no redirector.
+  bdpm         France's public medicines database (ANSM, Licence Ouverte): CIP13 to medicine name and holder, names verbatim.
+  banks-de     The Bundesbank sort-code file (Quelle: Deutsche Bundesbank): bank code to bank name, verbatim, quarterly.
 
 Output (in --out): list.bin (LSL2: sorted SHA-256 prefixes for URLs, hosts, addresses), psl.txt.gz,
-shorteners.txt.gz, affiliates.txt.gz, confusables.txt.gz, brands.txt.gz, rdap-dns.json.gz, list.json (the manifest: every asset's SHA-256
+shorteners.txt.gz, affiliates.txt.gz, confusables.txt.gz, brands.txt.gz, rdap-dns.json.gz, bdpm.txt.gz, banks-de.txt.gz, list.json (the manifest: every asset's SHA-256
 and size, the source outcomes, the Ed25519 signature over the manifest when LIST_SIGNING_KEY is set),
 and list.sig (the same signature).
 
@@ -69,6 +71,10 @@ BLOCKLISTS = {
     "ofac": "https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.XML",
 }
 POLKADOT_ADDRESSES = "https://polkadot.js.org/phishing/address.json"
+BDPM_BASE = "https://base-donnees-publique.medicaments.gouv.fr"
+BLZ_PAGE = "https://www.bundesbank.de/de/aufgaben/unbarer-zahlungsverkehr/serviceangebot/bankleitzahlen/download-bankleitzahlen-602592"
+OURAIRPORTS = "https://davidmegginson.github.io/ourairports-data/airports.csv"
+REFERENCE_META: dict[str, dict] = {}  # per-asset facts a builder records for the manifest (dates, notices, windows)
 REFERENCE = {
     "psl": "https://publicsuffix.org/list/public_suffix_list.dat",
     "shorteners": "https://raw.githubusercontent.com/PeterDaveHello/url-shorteners/master/list",
@@ -86,6 +92,11 @@ REFERENCE = {
     # IANA's RDAP bootstrap (RFC 9224): which registry answers RDAP for each top-level domain, so the phone's domain-age
     # check asks the registry itself instead of the rdap.org redirector
     "rdap-dns": "https://data.iana.org/rdap/dns.json",
+    # France's public medicines database (ANSM, Licence Ouverte): the CIP13 file; the builder fetches the CIS file and the
+    # download page (for the mandatory update date) itself
+    "bdpm": BDPM_BASE + "/download/file/CIS_CIP_bdpm.txt",
+    # the Bundesbank download page: the builder reads the current file link and the validity window from it
+    "banks-de": BLZ_PAGE,
 }
 
 # GeoNames country files kept for the postal symbologies the reader decodes: POSTNET and Intelligent Mail (US),
@@ -737,6 +748,106 @@ def build_aic(data: bytes) -> str:
     return "\n".join(f"{aic}\t{rest}" for aic, rest in sorted(rows.items())) + "\n"
 
 
+
+
+def _decode_text(data: bytes) -> str:
+    """The BDPM files are published in two encodings (one file UTF-8, the other Latin-1); take UTF-8 when it parses."""
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data.decode("latin-1")
+
+
+def build_bdpm(cip_data: bytes, cis_data: bytes | None = None, page: bytes | None = None) -> str:
+    """France's public medicines database (ANSM), Licence Ouverte: one line per presentation, cip13<TAB>name<TAB>holder, the
+    name and the holder copied verbatim from the CIS file (the licence forbids altering them). CIS_CIP_bdpm.txt maps a CIP13
+    to its CIS; CIS_bdpm.txt names the medicine and its holder. The download page states the BDPM update date, which the
+    mandatory credit must carry, so it is recorded in the manifest. A short or undated answer is refused."""
+    cis_data = cis_data if cis_data is not None else fetch(BDPM_BASE + "/download/file/CIS_bdpm.txt")
+    page = page if page is not None else fetch(BDPM_BASE + "/telechargement")
+    m = re.search(r"mise \u00e0 jour le (\d{2})/(\d{2})/(\d{4})", _decode_text(page))
+    if not m:
+        raise ValueError("bdpm: the update date was not found on the download page")
+    updated = f"{m.group(3)}-{m.group(2)}-{m.group(1)}"
+    names: dict[str, tuple[str, str]] = {}
+    for line in _decode_text(cis_data).splitlines():
+        f = line.split("\t")
+        if len(f) >= 11 and f[0].isdigit():
+            names[f[0]] = (f[1].strip(), f[10].strip())
+    rows: dict[str, str] = {}
+    for line in _decode_text(cip_data).splitlines():
+        f = line.split("\t")
+        if len(f) >= 7 and len(f[6]) == 13 and f[6].isdigit() and f[0] in names:
+            name, holder = names[f[0]]
+            rows.setdefault(f[6], f"{f[6]}\t{name}\t{holder}")
+    if len(rows) < 10000:
+        raise ValueError(f"bdpm: only {len(rows)} presentations, the files answered short")
+    REFERENCE_META["bdpm"] = {"updated": updated, "licence": "Licence Ouverte / Open Licence (Etalab)",
+                              "credit": "Source: Base de donn\u00e9es publique des m\u00e9dicaments (ANSM), " + BDPM_BASE
+                                        + ", BDPM update of " + updated + ", Licence Ouverte / Open Licence (Etalab)"}
+    return "\n".join(rows[k] for k in sorted(rows)) + "\n"
+
+
+def build_banks_de(page: bytes, data: bytes | None = None) -> str:
+    """The Deutsche Bundesbank's bank sort code file (Quelle: Deutsche Bundesbank): one line per lead record, blz<TAB>name,
+    the name copied verbatim from the 58-character Bezeichnung field with only its fixed-width padding removed; records
+    flagged for deletion are left out. The download page links the current file and states its validity window, both
+    read from the page each build so the quarterly refresh follows the Bundesbank calendar; the window is recorded in the
+    manifest. A page without the link or the window, or a short file, is refused."""
+    html = page.decode("utf-8", "replace")
+    m = re.search(r'href="([^"]*blz-aktuell-txt-data\.txt)"', html)
+    if not m:
+        raise ValueError("banks-de: the current file link was not found on the download page")
+    href = m.group(1)
+    url = href if href.startswith("http") else "https://www.bundesbank.de" + href
+    w = re.search(r"g\u00fcltig vom (\d{2})\.(\d{2})\.(\d{4}) bis (\d{2})\.(\d{2})\.(\d{4})", html)
+    if not w:
+        raise ValueError("banks-de: the validity window was not found on the download page")
+    valid_from = f"{w.group(3)}-{w.group(2)}-{w.group(1)}"
+    valid_to = f"{w.group(6)}-{w.group(5)}-{w.group(4)}"
+    data = data if data is not None else fetch(url)
+    rows = []
+    for raw in data.decode("latin-1").splitlines():
+        raw = raw.rstrip("\r")
+        if len(raw) < 168 or raw[8] != "1" or raw[159] == "1":
+            continue
+        rows.append(f"{raw[0:8]}\t{raw[9:67].rstrip()}")
+    if len(rows) < 2000:
+        raise ValueError(f"banks-de: only {len(rows)} lead records, the file answered short")
+    rows.sort()
+    REFERENCE_META["banks-de"] = {"valid_from": valid_from, "valid_to": valid_to, "notice": "Quelle: Deutsche Bundesbank"}
+    return "\n".join(rows) + "\n"
+
+
+def crosscheck_aviation(aviation_text: str, csv_data: bytes) -> dict:
+    """Compare the airport half of the aviation table with OurAirports (public domain): how many IATA codes both know, how
+    many names agree (one contains the other after folding case and punctuation), a sample of the differences, and the
+    codes each side lacks. A report only; Wikidata stays the source of record."""
+    ours = {}
+    for line in aviation_text.splitlines():
+        parts = line.split("\t")
+        if len(parts) == 3 and parts[0] == "A":
+            ours[parts[1]] = parts[2]
+    theirs: dict[str, str] = {}
+    scheduled = set()
+    for row in csv.DictReader(io.StringIO(csv_data.decode("utf-8"))):
+        code = (row.get("iata_code") or "").strip().upper()
+        if len(code) == 3 and row.get("type") in ("large_airport", "medium_airport", "small_airport"):
+            theirs.setdefault(code, (row.get("name") or "").strip())
+            if row.get("scheduled_service") == "yes":
+                scheduled.add(code)
+    if len(theirs) < 1000:
+        raise ValueError(f"ourairports: only {len(theirs)} airports with an IATA code, the file answered short")
+    fold = lambda s: re.sub(r"[^a-z0-9]+", " ", s.lower()).strip()
+    both = sorted(c for c in ours if c in theirs)
+    differ = [c for c in both if not (fold(ours[c]) == fold(theirs[c]) or fold(ours[c]) in fold(theirs[c]) or fold(theirs[c]) in fold(ours[c]))]
+    return {"source": "OurAirports (public domain)", "compared": len(both), "agree": len(both) - len(differ), "differ": len(differ),
+            "differ_sample": [{"code": c, "wikidata": ours[c], "ourairports": theirs[c]} for c in differ[:10]],
+            "ours_not_there": sum(1 for c in ours if c not in theirs),
+            "scheduled_not_here": sorted(c for c in scheduled if c not in ours)[:20],
+            "scheduled_not_here_count": sum(1 for c in scheduled if c not in ours)}
+
+
 def build_rdap_bootstrap(data: bytes) -> str:
     """IANA's RDAP bootstrap file for domain names (RFC 9224): {"version", "publication", "description", "services":
     [[[tld, ...], [base_url, ...]], ...]}. The phone resolves a domain's top-level domain to its registry's RDAP base
@@ -774,7 +885,7 @@ def reference_filename(name: str) -> str:
 
 
 def build_reference(report: dict) -> dict[str, bytes]:
-    builders = {"psl": build_psl, "shorteners": build_shorteners, "confusables": build_confusables, "brands": build_brands, "aviation": build_aviation, "postal": build_postal, "aic": build_aic, "rdap-dns": build_rdap_bootstrap}
+    builders = {"psl": build_psl, "shorteners": build_shorteners, "confusables": build_confusables, "brands": build_brands, "aviation": build_aviation, "postal": build_postal, "aic": build_aic, "rdap-dns": build_rdap_bootstrap, "bdpm": build_bdpm, "banks-de": build_banks_de}
     out: dict[str, bytes] = {}
     now = int(time.time())
     for name, url in REFERENCE.items():
@@ -793,6 +904,12 @@ def build_reference(report: dict) -> dict[str, bytes]:
             report[name] = {"fetched": True, "count": reference_count(name, text), "seconds": int(round(time.time() - t0))}
         except (urllib.error.URLError, urllib.error.HTTPError, ValueError, TimeoutError, OSError, zipfile.BadZipFile, KeyError) as e:
             report[name] = {"fetched": False, "count": 0, "error": f"{type(e).__name__}: {str(e)[:160]}"}
+    # the airport half of the aviation table is cross-checked against OurAirports; a report, never a gate
+    if "aviation" in out:
+        try:
+            report["aviation"]["crosscheck"] = crosscheck_aviation(out["aviation"].decode("utf-8"), fetch(OURAIRPORTS))
+        except (urllib.error.URLError, urllib.error.HTTPError, ValueError, TimeoutError, OSError, KeyError) as e:
+            report["aviation"]["crosscheck"] = {"error": f"{type(e).__name__}: {str(e)[:160]}"}
     # our own curated reference lists, read from the repository, no network: affiliates.txt
     curated = os.path.join(os.path.dirname(os.path.abspath(__file__)), CURATED_DIR, "affiliates.txt")
     try:
@@ -875,6 +992,7 @@ def main() -> int:
             f.write(gz)
         count_key = "services" if name == "rdap-dns" else "lines"
         assets[fname] = {"sha256": hashlib.sha256(gz).hexdigest(), "bytes": len(gz), count_key: reference_count(name, text.decode("utf-8"))}
+        assets[fname].update(REFERENCE_META.get(name, {}))
 
     manifest = {
         "format": MAGIC.decode("ascii"),
