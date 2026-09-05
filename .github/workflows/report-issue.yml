@@ -1,7 +1,8 @@
 name: Intake a report issue
 
 # A connector (Power Automate, Zapier, or any tool that can open a GitHub issue) posts one issue per form response,
-# labelled "report", with key: value lines in the body (see tools/issue_intake.py). Only the repository owner's
+# labelled "report" or titled "Report <timestamp>" (the Power Automate GitHub connector cannot set labels), with
+# key: value lines in the body (see tools/issue_intake.py). Only the repository owner's
 # account may open them; the issue is turned into a case and closed.
 
 on:
@@ -15,7 +16,7 @@ permissions:
 
 jobs:
   intake:
-    if: github.event.issue.user.login == 'verdettoqr' && contains(github.event.issue.labels.*.name, 'report')
+    if: github.event.issue.user.login == 'verdettoqr' && (contains(github.event.issue.labels.*.name, 'report') || startsWith(github.event.issue.title, 'Report '))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     concurrency:
