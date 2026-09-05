@@ -401,3 +401,24 @@ def test_curated_affiliates_file_is_well_formed():
     for dual in ("fave.co", "geni.us", "prf.hn", "temu.to"):
         assert dual in hosts, dual
 
+
+def test_rdap_bootstrap_builder():
+    import json as _json
+    import pytest
+    filler = [[[f"x{i:03d}"], [f"https://rdap.example{i}.test/"]] for i in range(120)]
+    doc = {"version": "1.0", "publication": "2026-07-23T02:00:03Z", "description": "RDAP bootstrap file for Domain Name System registrations",
+           "services": [[["COM.", "net"], ["https://rdap.verisign.com/com/v1/", "http://rdap.verisign.com/com/v1/"]]] + filler}
+    out = build_list.build_rdap_bootstrap(_json.dumps(doc).encode("utf-8"))
+    parsed = _json.loads(out)
+    assert out.endswith("\n") and parsed["version"] == "1.0" and len(parsed["services"]) == 121
+    assert [["com", "net"], ["https://rdap.verisign.com/com/v1/", "http://rdap.verisign.com/com/v1/"]] in parsed["services"]
+    assert build_list.reference_count("rdap-dns", out) == 121 and build_list.reference_filename("rdap-dns") == "rdap-dns.json.gz"
+    assert build_list.reference_filename("psl") == "psl.txt.gz" and build_list.reference_count("psl", "a\nb\n") == 2
+    # a short answer, a missing services array, and a non-http base url are refused so the previous bundle stands
+    with pytest.raises(ValueError):
+        build_list.build_rdap_bootstrap(_json.dumps({"version": "1.0", "services": filler[:5]}).encode("utf-8"))
+    with pytest.raises(ValueError):
+        build_list.build_rdap_bootstrap(_json.dumps({"version": "1.0"}).encode("utf-8"))
+    bad = {"version": "1.0", "services": [[["kg"], ["ftp://rdap.cctld.kg/"]]] + filler}
+    with pytest.raises(ValueError):
+        build_list.build_rdap_bootstrap(_json.dumps(bad).encode("utf-8"))

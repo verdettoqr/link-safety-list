@@ -39,6 +39,7 @@ Reference data, plain text:
 | [Wikidata](https://www.wikidata.org/) IATA codes | Airport (P238) and airline (P229) names, shown on boarding passes in place of codes; a code held by several items goes to the best-known one (sitelinks, then the shorter name) | CC0 |
 | [GeoNames](https://www.geonames.org/) postal codes | Place and region behind a postal barcode (US, GB, NL, JP, BR, DE, KR files) | CC BY 4.0 |
 | [AIFA](https://www.aifa.gov.it/) authorised medicines | Medicine, pack, and holder behind an Italian pharmacode (Code 32) | CC BY 4.0 |
+| [IANA RDAP bootstrap](https://data.iana.org/rdap/dns.json) (RFC 9224) | The registry that answers RDAP for each top-level domain, so the app's domain-age check asks the registry directly and no redirector sees the domains people check; not a safety list, so it is outside the weekly numbers | Public registry data published by IANA |
 
 URLs, hosts, and addresses are normalized the way the app normalizes a
 scanned code, hashed with SHA-256, and only a short prefix is kept, so

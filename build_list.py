@@ -14,9 +14,10 @@ Reference data, always built:
   shorteners   URL shortener hosts (PeterDaveHello/url-shorteners).
   confusables  Unicode confusables, kept to the mappings whose target is ASCII, for lookalike detection.
   brands       The top 10,000 domains from the Majestic Million (CC BY 3.0), for "popular site" notes and lookalike targets.
+  rdap-dns     IANA's RDAP bootstrap file (RFC 9224), so the phone asks a domain's registry for its age directly, no redirector.
 
 Output (in --out): list.bin (LSL2: sorted SHA-256 prefixes for URLs, hosts, addresses), psl.txt.gz,
-shorteners.txt.gz, affiliates.txt.gz, confusables.txt.gz, brands.txt.gz, list.json (the manifest: every asset's SHA-256
+shorteners.txt.gz, affiliates.txt.gz, confusables.txt.gz, brands.txt.gz, rdap-dns.json.gz, list.json (the manifest: every asset's SHA-256
 and size, the source outcomes, the Ed25519 signature over the manifest when LIST_SIGNING_KEY is set),
 and list.sig (the same signature).
 
@@ -82,6 +83,9 @@ REFERENCE = {
     # the builder fetches the per-country files under this directory itself
     "postal": "https://download.geonames.org/export/zip/",
     "aic": "https://drive.aifa.gov.it/farmaci/confezioni_fornitura.csv",
+    # IANA's RDAP bootstrap (RFC 9224): which registry answers RDAP for each top-level domain, so the phone's domain-age
+    # check asks the registry itself instead of the rdap.org redirector
+    "rdap-dns": "https://data.iana.org/rdap/dns.json",
 }
 
 # GeoNames country files kept for the postal symbologies the reader decodes: POSTNET and Intelligent Mail (US),
@@ -733,8 +737,44 @@ def build_aic(data: bytes) -> str:
     return "\n".join(f"{aic}\t{rest}" for aic, rest in sorted(rows.items())) + "\n"
 
 
+def build_rdap_bootstrap(data: bytes) -> str:
+    """IANA's RDAP bootstrap file for domain names (RFC 9224): {"version", "publication", "description", "services":
+    [[[tld, ...], [base_url, ...]], ...]}. The phone resolves a domain's top-level domain to its registry's RDAP base
+    URL from this file and asks the registry directly, so no redirector sees the domains people check. Validated and
+    re-serialized compactly with sorted keys; a short or malformed file is refused so the previous bundle stands."""
+    doc = json.loads(data.decode("utf-8"))
+    services = doc.get("services")
+    if not isinstance(services, list) or len(services) < 100:
+        raise ValueError(f"rdap-dns: {0 if not isinstance(services, list) else len(services)} services, expected hundreds")
+    out = []
+    for entry in services:
+        if not (isinstance(entry, list) and len(entry) == 2 and entry[0] and entry[1]):
+            raise ValueError("rdap-dns: a service entry is not [tlds, urls]")
+        tlds = [str(t).strip().lower().rstrip(".") for t in entry[0]]
+        urls = [str(u).strip() for u in entry[1]]
+        if not all(tlds) or not all(u.startswith(("https://", "http://")) for u in urls):
+            raise ValueError("rdap-dns: an empty tld or a non-http base url")
+        out.append([sorted(tlds), urls])
+    out.sort(key=lambda e: e[0][0])
+    kept = {"version": str(doc.get("version", "")), "publication": str(doc.get("publication", "")),
+            "description": str(doc.get("description", "")), "services": out}
+    return json.dumps(kept, separators=(",", ":"), sort_keys=True, ensure_ascii=True) + "\n"
+
+
+def reference_count(name: str, text: str) -> int:
+    """What the manifest and the source report count for a reference asset: lines for the text files, service entries
+    for the RDAP bootstrap file."""
+    if name == "rdap-dns":
+        return len(json.loads(text)["services"])
+    return text.count("\n")
+
+
+def reference_filename(name: str) -> str:
+    return f"{name}.json.gz" if name == "rdap-dns" else f"{name}.txt.gz"
+
+
 def build_reference(report: dict) -> dict[str, bytes]:
-    builders = {"psl": build_psl, "shorteners": build_shorteners, "confusables": build_confusables, "brands": build_brands, "aviation": build_aviation, "postal": build_postal, "aic": build_aic}
+    builders = {"psl": build_psl, "shorteners": build_shorteners, "confusables": build_confusables, "brands": build_brands, "aviation": build_aviation, "postal": build_postal, "aic": build_aic, "rdap-dns": build_rdap_bootstrap}
     out: dict[str, bytes] = {}
     now = int(time.time())
     for name, url in REFERENCE.items():
@@ -750,7 +790,7 @@ def build_reference(report: dict) -> dict[str, bytes]:
         try:
             text = builders[name](fetch(url))
             out[name] = text.encode("utf-8")
-            report[name] = {"fetched": True, "count": text.count("\n"), "seconds": int(round(time.time() - t0))}
+            report[name] = {"fetched": True, "count": reference_count(name, text), "seconds": int(round(time.time() - t0))}
         except (urllib.error.URLError, urllib.error.HTTPError, ValueError, TimeoutError, OSError, zipfile.BadZipFile, KeyError) as e:
             report[name] = {"fetched": False, "count": 0, "error": f"{type(e).__name__}: {str(e)[:160]}"}
     # our own curated reference lists, read from the repository, no network: affiliates.txt
@@ -829,11 +869,12 @@ def main() -> int:
     data = write_bin(os.path.join(args.out, "list.bin"), sorted(urls), sorted(hosts), sorted(addresses), generated_at)
     assets = {"list.bin": {"sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data), "url_count": len(urls), "host_count": len(hosts), "address_count": len(addresses)}}
     for name, text in reference.items():
-        fname = f"{name}.txt.gz"
+        fname = reference_filename(name)
         gz = gzip.compress(text, mtime=0)
         with open(os.path.join(args.out, fname), "wb") as f:
             f.write(gz)
-        assets[fname] = {"sha256": hashlib.sha256(gz).hexdigest(), "bytes": len(gz), "lines": text.count(b"\n")}
+        count_key = "services" if name == "rdap-dns" else "lines"
+        assets[fname] = {"sha256": hashlib.sha256(gz).hexdigest(), "bytes": len(gz), count_key: reference_count(name, text.decode("utf-8"))}
 
     manifest = {
         "format": MAGIC.decode("ascii"),

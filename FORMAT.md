@@ -10,6 +10,7 @@ One release, tagged `current`, replaced on every build. It holds:
 | `affiliates.txt.gz` | Affiliate and click-tracking redirect hosts, one per line (optional; the phone downloads it when the manifest carries it) | 1 KB |
 | `confusables.txt.gz` | Unicode confusables whose target is ASCII, `HEX<TAB>target` per line | 30 KB |
 | `brands.txt.gz` | The top 10,000 domains, one per line, most popular first | 60 KB |
+| `rdap-dns.json.gz` | IANA's RDAP bootstrap file for domain names (RFC 9224), validated and minified; optional for the phone | 8 KB |
 | `list.json` | The manifest: every asset's SHA-256 and size, source outcomes, the signature | 2 KB |
 | `list.sig` | The same signature on its own | 90 B |
 
@@ -98,3 +99,7 @@ One line per postal code: `country<TAB>code<TAB>place<TAB>region<TAB>lat<TAB>lng
 ## aic.txt.gz
 
 One line per Italian medicine pack: `aic<TAB>name<TAB>pack<TAB>holder<TAB>status`, status A authorised, S suspended, R revoked, from the AIFA list of authorised medicines (CC BY 4.0). Optional for the phone.
+
+## rdap-dns.json.gz
+
+IANA's RDAP bootstrap file for domain names (RFC 9224) as one JSON object with keys sorted and no whitespace: `version`, `publication`, `description`, and `services`, a list of `[[tld, ...], [base_url, ...]]` pairs with lower-case top-level domains. The phone resolves a domain's top-level domain to its registry's RDAP base URL here and asks `<base>/domain/<domain>` itself; a top-level domain with no entry, or a bundle without this file, falls back to the rdap.org redirector. The manifest records `services`, the number of entries, in place of `lines`. Optional for the phone.
