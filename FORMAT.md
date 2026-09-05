@@ -92,7 +92,7 @@ bundle it has.
 
 ## aviation.txt.gz
 
-One line per IATA code: `kind<TAB>code<TAB>name`, kind `A` for an airport and `L` for an airline, from Wikidata (CC0). Optional for the phone: a missing file only leaves boarding passes with their codes.
+One line per IATA code: `kind<TAB>code<TAB>name`, kind `A` for an airport and `L` for an airline, from Wikidata (CC0); airport codes with scheduled service that OurAirports (public domain) lists and Wikidata lacks are added from OurAirports, each named with its source in the build report (`sources.aviation.crosscheck.filled_from_ourairports`). Optional for the phone: a missing file only leaves boarding passes with their codes.
 
 ## postal.txt.gz
 

@@ -841,11 +841,22 @@ def crosscheck_aviation(aviation_text: str, csv_data: bytes) -> dict:
     fold = lambda s: re.sub(r"[^a-z0-9]+", " ", s.lower()).strip()
     both = sorted(c for c in ours if c in theirs)
     differ = [c for c in both if not (fold(ours[c]) == fold(theirs[c]) or fold(ours[c]) in fold(theirs[c]) or fold(theirs[c]) in fold(ours[c]))]
+    missing = sorted(c for c in scheduled if c not in ours and theirs.get(c))
     return {"source": "OurAirports (public domain)", "compared": len(both), "agree": len(both) - len(differ), "differ": len(differ),
             "differ_sample": [{"code": c, "wikidata": ours[c], "ourairports": theirs[c]} for c in differ[:10]],
             "ours_not_there": sum(1 for c in ours if c not in theirs),
-            "scheduled_not_here": sorted(c for c in scheduled if c not in ours)[:20],
-            "scheduled_not_here_count": sum(1 for c in scheduled if c not in ours)}
+            "scheduled_not_here_count": len(missing),
+            # a scheduled-service airport Wikidata lacks is a gap, not a naming dispute: these rows are filled from OurAirports
+            "fill": [(c, theirs[c]) for c in missing]}
+
+
+def fill_aviation(text: str, fill: list[tuple[str, str]]) -> str:
+    """Add airport rows the table lacks, in the table's own format (kind<TAB>code<TAB>name), keeping the file sorted; a code
+    Wikidata already has is never touched."""
+    have = {line.split("\t")[1] for line in text.splitlines() if line.count("\t") == 2 and line.startswith("A\t")}
+    rows = [line for line in text.splitlines() if line]
+    rows += [f"A\t{code}\t{name}" for code, name in fill if code not in have and name]
+    return "\n".join(sorted(set(rows))) + "\n"
 
 
 def build_rdap_bootstrap(data: bytes) -> str:
@@ -907,7 +918,14 @@ def build_reference(report: dict) -> dict[str, bytes]:
     # the airport half of the aviation table is cross-checked against OurAirports; a report, never a gate
     if "aviation" in out:
         try:
-            report["aviation"]["crosscheck"] = crosscheck_aviation(out["aviation"].decode("utf-8"), fetch(OURAIRPORTS))
+            cc = crosscheck_aviation(out["aviation"].decode("utf-8"), fetch(OURAIRPORTS))
+            fill = cc.pop("fill", [])
+            if fill:
+                text = fill_aviation(out["aviation"].decode("utf-8"), fill)
+                out["aviation"] = text.encode("utf-8")
+                report["aviation"]["count"] = text.count("\n")
+            cc["filled_from_ourairports"] = [{"code": c, "name": n, "source": "OurAirports (public domain)"} for c, n in fill]
+            report["aviation"]["crosscheck"] = cc
         except (urllib.error.URLError, urllib.error.HTTPError, ValueError, TimeoutError, OSError, KeyError) as e:
             report["aviation"]["crosscheck"] = {"error": f"{type(e).__name__}: {str(e)[:160]}"}
     # our own curated reference lists, read from the repository, no network: affiliates.txt

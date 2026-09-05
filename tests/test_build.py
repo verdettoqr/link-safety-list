@@ -486,3 +486,20 @@ def test_crosscheck_aviation_reports_differences_without_gating():
     assert r["ours_not_there"] == 1 and "ZZY" in r["scheduled_not_here"]
     with pytest.raises(ValueError):
         build_list.crosscheck_aviation(ours, header.encode("utf-8"))
+
+
+def test_fill_aviation_adds_only_missing_airport_rows_in_the_table_format():
+    header = "id,ident,type,name,latitude_deg,longitude_deg,elevation_ft,continent,iso_country,iso_region,municipality,scheduled_service,icao_code,iata_code,gps_code,local_code,home_link,wikipedia_link,keywords\n"
+    rows = [f"{i},X{i:03d},small_airport,Field {i},0,0,0,NA,US,US-XX,Town,no,,{chr(65 + i // 676)}{chr(65 + (i // 26) % 26)}{chr(65 + i % 26)},,,,," for i in range(1200)]
+    rows += ["1,YUL,large_airport,Montreal Airport,0,0,0,NA,CA,CA-QC,Montreal,yes,CYUL,YUL,,,,,",
+             "2,ZZZ,large_airport,Somewhere Else,0,0,0,NA,CA,CA-QC,X,yes,,ZZY,,,,,"]
+    csv_data = (header + "\n".join(rows)).encode("utf-8")
+    ours = "A\tYUL\tMontreal-Trudeau International Airport\nL\tAC\tAir Canada\n"
+    cc = build_list.crosscheck_aviation(ours, csv_data)
+    assert cc["fill"] == [("ZZY", "Somewhere Else")] and cc["scheduled_not_here_count"] == 1
+    out = build_list.fill_aviation(ours, cc["fill"])
+    lines = out.splitlines()
+    assert "A\tZZY\tSomewhere Else" in lines and "A\tYUL\tMontreal-Trudeau International Airport" in lines and "L\tAC\tAir Canada" in lines
+    assert len(lines) == 3 and lines == sorted(lines) and all(l.count("\t") == 2 for l in lines)
+    # a second pass adds nothing, and a code Wikidata has is never overwritten
+    assert build_list.fill_aviation(out, [("YUL", "Other Name"), ("ZZY", "Somewhere Else")]) == out
