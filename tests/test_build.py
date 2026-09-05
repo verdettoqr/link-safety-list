@@ -483,7 +483,7 @@ def test_crosscheck_aviation_reports_differences_without_gating():
     ours = "A\tYUL\tMontreal-Trudeau International Airport\nA\tQQQ\tOnly Here Airport\nL\tAC\tAir Canada\n"
     r = build_list.crosscheck_aviation(ours, csv_data)
     assert r["compared"] == 1 and r["differ"] == 1 and r["differ_sample"][0]["code"] == "YUL"
-    assert r["ours_not_there"] == 1 and "ZZY" in r["scheduled_not_here"]
+    assert r["ours_not_there"] == 1 and r["scheduled_not_here_count"] == 1 and r["fill"] == [("ZZY", "Somewhere Else")]
     with pytest.raises(ValueError):
         build_list.crosscheck_aviation(ours, header.encode("utf-8"))
 
