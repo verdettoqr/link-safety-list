@@ -49,6 +49,15 @@ def main() -> int:
     data = json.loads(subprocess.run(["gh", "issue", "view", args.issue, "--json", "body,title"], check=True, capture_output=True, text=True).stdout)
     p = parse(data.get("body") or "")
     content = p.get("content", "")[:1500]
+    rid = f"report-{p['report_id']}"
+    if p["report_id"] != "issue":
+        n = subprocess.run(["gh", "issue", "list", "--state", "all", "--label", "case", "--search", f"{rid} in:body", "--json", "number", "--jq", "length"],
+                           check=True, capture_output=True, text=True).stdout.strip()
+        if n not in ("", "0"):
+            subprocess.run(["gh", "issue", "comment", args.issue, "--body", f"A case already carries {rid}; nothing dispatched."], check=True)
+            subprocess.run(["gh", "issue", "close", args.issue, "--reason", "not planned"], check=True)
+            print("already cased", rid)
+            return 0
     if not content and p["kind"] in ("r", "d", "o"):
         subprocess.run(["gh", "issue", "comment", args.issue, "--body", "Feedback without scanned content: kept for the digest, no case opened."], check=True)
         subprocess.run(["gh", "issue", "close", args.issue, "--reason", "completed"], check=True)
