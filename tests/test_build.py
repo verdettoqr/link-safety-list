@@ -374,6 +374,8 @@ def test_affiliates_builder():
     with pytest.raises(ValueError):
         build_affiliates(b"amazon.com  # a merchant, never\n" + filler)
     with pytest.raises(ValueError):
+        build_affiliates(b"www.amazon.com  # the same front door\n" + filler)
+    with pytest.raises(ValueError):
         build_affiliates(b"nodot  # not a host\n" + filler)
     with pytest.raises(ValueError):
         build_affiliates(b"only.example\n")
@@ -395,4 +397,7 @@ def test_curated_affiliates_file_is_well_formed():
     assert "bit.ly" not in hosts and "t.co" not in hosts and "amzn.to" not in hosts
     # a tracking subdomain of a merchant is listed as the subdomain, never the merchant
     assert "rover.ebay.com" in hosts and "ebay.com" not in hosts
+    # affiliate-only link services sit on both lists on purpose: the shortener path expands them, this list notes them
+    for dual in ("fave.co", "geni.us", "prf.hn", "temu.to"):
+        assert dual in hosts, dual
 

@@ -6,7 +6,8 @@
 #
 # The rule for an entry: the host exists to redirect and track, never to sell. A merchant's own
 # domain is never listed (amazon.com, ebay.com); a merchant's tracking subdomain is listed as that
-# subdomain (rover.ebay.com). A general shortener stays in shorteners.txt, not here. Each line names
+# subdomain (rover.ebay.com). A general-purpose shortener (bit.ly, amzn.to) stays in shorteners.txt, not
+# here; an affiliate-only link service may sit on both lists, and is here for the note. Each line names
 # the network after the hash sign. Curated at Verdetto from the networks' own link formats; entries
 # were cross-checked against the redirect providers in the ClearURLs rules (LGPL-3.0; nothing copied
 # from that data, hostnames are facts). A wrong entry costs a note, not a warning, so the list stays
@@ -29,7 +30,7 @@ pxf.io  # Impact
 7eer.net  # Impact
 ojrq.net  # Impact
 evyy.net  # Impact
-linksynergy.com  # Rakuten Advertising
+click.linksynergy.com  # Rakuten Advertising
 awin1.com  # Awin
 zenaps.com  # Awin
 ad.zanox.com  # Awin (Zanox)
@@ -38,9 +39,9 @@ shrsl.com  # ShareASale
 shareasale-analytics.com  # ShareASale
 redirectingat.com  # Skimlinks
 skimresources.com  # Skimlinks
-fave.co  # Skimlinks
+fave.co  # Skimlinks (also in shorteners.txt; kept here for the note)
 redirect.viglink.com  # Sovrn (VigLink)
-prf.hn  # Partnerize
+prf.hn  # Partnerize (also in shorteners.txt; kept here for the note)
 pjtra.com  # Ascend (Pepperjam)
 pjatr.com  # Ascend (Pepperjam)
 gopjn.com  # Ascend (Pepperjam)
@@ -59,13 +60,13 @@ tc.tradetracker.net  # TradeTracker
 ds1.nl  # Daisycon
 track.effiliation.com  # Effiliation
 digidip.net  # Digidip
-geni.us  # Genius Link
+geni.us  # Genius Link (also in shorteners.txt; kept here for the note)
 go.magik.ly  # Magic Links
 howl.me  # Howl
 shop-links.co  # Howl (Narrativ)
 rstyle.me  # LTK (rewardStyle)
 liketk.it  # LTK
-temu.to  # Temu affiliate links
+temu.to  # Temu affiliate links (also in shorteners.txt; kept here for the note)
 hop.clickbank.net  # ClickBank
 partner-ads.com  # Partner-ads
 idealo-partner.com  # idealo partner program

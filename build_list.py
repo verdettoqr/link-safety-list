@@ -557,7 +557,8 @@ def build_affiliates(data: bytes) -> str:
         host = normalize_host(line)
         if not host or "." not in host:
             raise ValueError(f"affiliates: not a host: {raw.strip()!r}")
-        if host in NEVER_AFFILIATE_HOSTS:
+        # a merchant's front door under www. is the same front door; the tracking subdomains keep their own names
+        if (host[4:] if host.startswith("www.") else host) in NEVER_AFFILIATE_HOSTS:
             raise ValueError(f"affiliates: a merchant domain is never an affiliate host: {host}")
         hosts.add(host)
     if len(hosts) < 20:
