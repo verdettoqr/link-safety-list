@@ -9,8 +9,8 @@ a case issue now goes through here, and only text by the workflow (github-action
   python tools/case_issue.py count --issue 12      # trusted "## Case" comments, one line
   python tools/case_issue.py has-report --issue 12 --report-id report-abc   # exit 0 if already recorded
 
-The workflow also locks each case issue when it creates it (case.yml), so outsiders cannot comment at all; this
-filter is the second lock, for issues created before that and for the day a lock is lifted by hand."""
+Locking the issues was tried and dropped: a locked issue refuses the workflow token's own comments (GraphQL
+"Unable to create comment because issue is locked", run 33936196790 on 2026-09-05), so this filter is the control."""
 from __future__ import annotations
 
 import argparse

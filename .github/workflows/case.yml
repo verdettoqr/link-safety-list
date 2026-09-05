@@ -74,8 +74,8 @@ jobs:
           if [ -z "$n" ]; then
             url=$(gh issue create --label case --title "$title" --body-file case/case.md)
             n=${url##*/}
-            # locked on creation: only collaborators and the workflow can comment, so no outsider's text reaches the case
-            gh issue lock "$n" || echo "could not lock issue $n"
+            # not locked: a locked issue refuses the workflow token's own comments (observed 2026-09-05, run 33936196790);
+            # what keeps a stranger's comment from counting is the trusted-author filter in tools/case_issue.py
           else
             rid=$(python -c "import json; c = json.load(open('case/evidence.json')); print('report-' + (c.get('report', {}).get('report_id') or 'manual'))")
             if [ "$rid" != "report-manual" ] && python tools/case_issue.py has-report --issue "$n" --report-id "$rid"; then
