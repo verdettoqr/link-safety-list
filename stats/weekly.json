@@ -1,0 +1,22 @@
+{
+  "cases_closed": 0,
+  "cases_opened": 0,
+  "entries_added": {
+    "addresses": 0,
+    "hosts": 0,
+    "urls": 0
+  },
+  "generated_at": "2026-09-05T11:10:35Z",
+  "issues_counted": true,
+  "reports_received": 0,
+  "source": "own/*.txt and the public case issues of verdettoqr/link-safety-list; no telemetry, nothing from phones",
+  "totals": {
+    "addresses": 0,
+    "allow": 0,
+    "hosts": 0,
+    "urls": 0
+  },
+  "unlisted": 0,
+  "week_end": "2026-08-30",
+  "week_start": "2026-08-24"
+}
