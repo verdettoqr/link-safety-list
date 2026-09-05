@@ -1,0 +1,42 @@
+name: Weekly numbers
+
+# Every Monday: the safety list's numbers for the week that just ended, from this repository's own files and its
+# public case issues. Writes stats/weekly.json and stats/history.jsonl and commits them. Nothing here reads a
+# phone; there is no per-scan data anywhere to read. The site fetches the JSON on its own schedule.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: read
+
+jobs:
+  numbers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Count the week
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tools/weekly_stats.py
+
+      - name: Commit the numbers
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add stats
+          if git diff --cached --quiet; then
+            echo "no change"
+          else
+            git commit -m "Weekly numbers through $(python -c 'import json;print(json.load(open("stats/weekly.json"))["week_end"])')"
+            git push
+          fi

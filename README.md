@@ -103,6 +103,17 @@ credential or User-Agent problem and is not retried. PhishTank's hourly
 dump answered 404 for a moment on 2026-09-04, and as the only URL-class
 source that alone stopped a build (issue #4).
 
+## Weekly numbers
+
+Every Monday the `Weekly numbers` workflow counts the week that just
+ended from public data only: reports received, cases opened and closed,
+entries added to `own/` after a person reviewed a report, entries
+suppressed after a listed-by-mistake review, and the running totals. It
+writes `stats/weekly.json` (the latest week) and appends
+`stats/history.jsonl` (one line per week), then commits them. Nothing
+comes from a phone: the app sends no per-scan data, so there is none to
+count. verdettoqr.com/safety-list shows the latest file.
+
 ## Run it yourself
 
 ```bash
