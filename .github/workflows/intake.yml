@@ -1,11 +1,11 @@
 name: Intake new reports
 
-# Every hour: read the report form's published CSV tab (no credentials; the address is a secret) and open a case
-# for every row that has none yet. The form is the only human input in the whole pipeline.
+# Manual fallback: read the report form's published CSV tab (address in the FORM_FEED_URL secret) and open a case
+# for every row that has none yet. The live route is the Power Automate flow "Report intake" (one "Report <timestamp>"
+# issue per response, see report-issue.yml); this schedule-free workflow stays for a day the flow is down, and runs
+# only when someone dispatches it with the feed address restored.
 
 on:
-  schedule:
-    - cron: "9 * * * *"
   workflow_dispatch:
 
 permissions:
