@@ -132,8 +132,10 @@ class PageScan(HTMLParser):
 
 def public_host(host: str) -> bool:
     """True when every address the host resolves to is a public one. A literal or resolved private, loopback,
-    link-local, multicast or reserved address is refused, so a report can never make the runner fetch its own
-    network or a cloud metadata service (169.254.169.254) and publish the answer in a case."""
+    link-local, multicast or reserved address is refused, so a report does not make the runner fetch its own
+    network or a cloud metadata service (169.254.169.254) and publish the answer in a case. The name is resolved
+    here and again by urlopen, so a host that changes its answer between the two (DNS rebinding) is not caught;
+    the runner holds nothing of ours, and a pinned-address fetch is filed as the closing step."""
     if not host:
         return False
     try:

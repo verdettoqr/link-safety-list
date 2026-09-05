@@ -6,8 +6,12 @@ from __future__ import annotations
 import datetime as dt
 import json
 import re
+import os
 import subprocess
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from tools.case_issue import trusted_texts  # noqa: E402
 
 ENTRY_RE = re.compile(r"^ENTRY:\s+(url|host|address)\s+(\S+)\s+#", re.M)
 KIND_RE = re.compile(r"Kind: (.+?)\. Class:")
@@ -30,8 +34,10 @@ def main() -> int:
             continue  # a decision is being applied
         n = str(c["number"])
         age = now - dt.datetime.fromisoformat(c["createdAt"].replace("Z", "+00:00"))
-        data = json.loads(gh("issue", "view", n, "--json", "body,comments"))
-        texts = [data.get("body") or ""] + [x.get("body") or "" for x in data.get("comments", [])]
+        data = json.loads(gh("issue", "view", n, "--json", "author,body,comments"))
+        texts = trusted_texts(data)   # the workflow and the owner only; a stranger cannot mark a case as re-fetched
+        if not texts:
+            continue
         if age > dt.timedelta(days=7):
             gh("issue", "comment", n, "--body", "No decisive evidence within a week; closed without listing. Report it again if it is still live.")
             gh("issue", "edit", n, "--add-label", "not-a-phish")
