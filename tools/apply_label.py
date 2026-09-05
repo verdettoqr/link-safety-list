@@ -3,8 +3,8 @@
 
   python tools/apply_label.py --label list:url --issue 12
 
-The proposed entry is the last `ENTRY: <class> <entry>  # <date> case-<key> <evidence>` line in the issue body or
-its comments. list:url, list:host, list:address write the entry to own/<class>.txt with today's date and the issue
+The proposed entry is the last `ENTRY: <class> <entry>  # <date> case-<key> <evidence>` line written by the
+workflow or the owner on the issue (tools/case_issue.py; a stranger's comment never counts). list:url, list:host, list:address write the entry to own/<class>.txt with today's date and the issue
 number; unlist writes it to own/allow.txt; not-a-phish and already only close the case. A popular host is never
 host-listed: the entry is refused with a comment, and the person lists the URL instead."""
 from __future__ import annotations
@@ -22,6 +22,7 @@ import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from build_list import normalize, normalize_address, normalize_host  # noqa: E402
+from tools.case_issue import entries as trusted_entries  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RELEASE = "https://github.com/verdettoqr/link-safety-list/releases/download/current"
@@ -57,9 +58,8 @@ def main() -> int:
     ap.add_argument("--issue", required=True)
     args = ap.parse_args()
     label, issue = args.label, args.issue
-    data = json.loads(gh("issue", "view", issue, "--json", "body,comments,title"))
-    texts = [data.get("body") or ""] + [c.get("body") or "" for c in data.get("comments", [])]
-    entries = [m for t in texts for m in ENTRY_RE.finditer(t)]
+    data = json.loads(gh("issue", "view", issue, "--json", "author,body,comments,title"))
+    entries = trusted_entries(data)
     if label in ("not-a-phish", "already"):
         comment(issue, "Closed as `%s`; nothing listed." % label)
         subprocess.run(["gh", "issue", "close", issue, "--reason", "not planned"], check=True)

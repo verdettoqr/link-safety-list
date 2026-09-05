@@ -74,14 +74,17 @@ jobs:
           if [ -z "$n" ]; then
             url=$(gh issue create --label case --title "$title" --body-file case/case.md)
             n=${url##*/}
+            # locked on creation: only collaborators and the workflow can comment, so no outsider's text reaches the case
+            gh issue lock "$n" || echo "could not lock issue $n"
           else
             rid=$(python -c "import json; c = json.load(open('case/evidence.json')); print('report-' + (c.get('report', {}).get('report_id') or 'manual'))")
-            if [ "$rid" != "report-manual" ] && gh issue view "$n" --json body,comments --jq '[.body] + [.comments[].body] | join("\n")' | grep -q "Report id: $rid\."; then
+            if [ "$rid" != "report-manual" ] && python tools/case_issue.py has-report --issue "$n" --report-id "$rid"; then
               echo "report $rid already recorded on case $n; not counted again"
               echo "number=$n" >> "$GITHUB_OUTPUT"; echo "three=false" >> "$GITHUB_OUTPUT"; echo "repeat=true" >> "$GITHUB_OUTPUT"; exit 0
             fi
             gh issue comment "$n" --body-file case/case.md
-            reports=$(gh issue view "$n" --json comments --jq '[.comments[] | select(.body | startswith("## Case"))] | length')
+            # only comments the workflow or the owner wrote count (tools/case_issue.py); a stranger's cannot reach three
+            reports=$(python tools/case_issue.py count --issue "$n")
             reports=$((reports + 1))
             echo "case $n now has $reports reports"
             if [ "$reports" -ge 3 ]; then gh issue edit "$n" --add-label three-reports; three=true; fi

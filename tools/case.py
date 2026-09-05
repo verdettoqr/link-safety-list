@@ -12,9 +12,11 @@ import argparse
 import gzip
 import hashlib
 import io
+import ipaddress
 import json
 import os
 import re
+import socket
 import sys
 import time
 import urllib.error
@@ -128,11 +130,32 @@ class PageScan(HTMLParser):
             self.title += data
 
 
+def public_host(host: str) -> bool:
+    """True when every address the host resolves to is a public one. A literal or resolved private, loopback,
+    link-local, multicast or reserved address is refused, so a report can never make the runner fetch its own
+    network or a cloud metadata service (169.254.169.254) and publish the answer in a case."""
+    if not host:
+        return False
+    try:
+        addresses = [ipaddress.ip_address(host.strip("[]"))]
+    except ValueError:
+        try:
+            addresses = [ipaddress.ip_address(info[4][0]) for info in socket.getaddrinfo(host, None)]
+        except (socket.gaierror, UnicodeError, ValueError):
+            return False
+    return bool(addresses) and all(a.is_global and not a.is_multicast for a in addresses)
+
+
 def fetch_chain(url: str) -> dict:
-    """Follow redirects by hand so the chain is recorded; keep the final page's bytes."""
+    """Follow redirects by hand so the chain is recorded; keep the final page's bytes. Every hop is checked with
+    public_host before it is fetched."""
     chain = []
     current = url
     for _ in range(MAX_HOPS):
+        host = urllib.parse.urlsplit(current).hostname or ""
+        if not public_host(host):
+            chain.append({"url": current, "error": "not a public address; not fetched"})
+            return {"chain": chain, "final_url": current, "status": None, "body": b"", "error": "not a public address"}
         req = urllib.request.Request(current, headers={"User-Agent": BROWSER_UA, "Accept": "text/html,*/*;q=0.8"})
         opener = urllib.request.build_opener(NoRedirect())
         try:
